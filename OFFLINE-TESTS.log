@@ -1,0 +1,21 @@
+test_acquires_positive_and_negative_offsets (test_rx.AutomaticTuningTests.test_acquires_positive_and_negative_offsets) ... ok
+test_existing_pll_can_receive_when_pilot_is_absent (test_rx.AutomaticTuningTests.test_existing_pll_can_receive_when_pilot_is_absent) ... ok
+test_reacquires_after_frequency_jump (test_rx.AutomaticTuningTests.test_reacquires_after_frequency_jump) ... ok
+test_reacquires_after_silence_and_changed_frequency (test_rx.AutomaticTuningTests.test_reacquires_after_silence_and_changed_frequency) ... ok
+test_rejects_stronger_unrelated_tone_then_finds_data (test_rx.AutomaticTuningTests.test_rejects_stronger_unrelated_tone_then_finds_data) ... ok
+test_tone_noise_silence_and_corrupt_frames_never_claim_lock (test_rx.AutomaticTuningTests.test_tone_noise_silence_and_corrupt_frames_never_claim_lock) ... ok
+test_tracks_500_hz_pilot_without_old_center_limit (test_rx.AutomaticTuningTests.test_tracks_500_hz_pilot_without_old_center_limit) ... ok
+test_tracks_slow_drift_without_losing_lock (test_rx.AutomaticTuningTests.test_tracks_slow_drift_without_losing_lock) ... ok
+test_clean_audio_recovers_known_payload_and_locks (test_rx.DecoderTests.test_clean_audio_recovers_known_payload_and_locks) ... ok
+test_incomplete_float_sample_is_rejected (test_rx.DecoderTests.test_incomplete_float_sample_is_rejected) ... ok
+test_lock_expires_after_signal_loss (test_rx.DecoderTests.test_lock_expires_after_signal_loss) ... ok
+test_noise_and_silence_never_lock (test_rx.DecoderTests.test_noise_and_silence_never_lock) ... ok
+test_pilot_frequency_measurement (test_rx.DecoderTests.test_pilot_frequency_measurement) ... ok
+test_recovery_after_digital_silence (test_rx.DecoderTests.test_recovery_after_digital_silence) ... ok
+test_shifted_audio_at_matching_receive_center (test_rx.DecoderTests.test_shifted_audio_at_matching_receive_center) ... ok
+test_valid_rs_but_wrong_crc_never_locks (test_rx.DecoderTests.test_valid_rs_but_wrong_crc_never_locks) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 3.627s
+
+OK

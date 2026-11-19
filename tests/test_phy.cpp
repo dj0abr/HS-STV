@@ -1,0 +1,147 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "mm_sstv/tx_modulator.hpp"
+#include <liquid/liquid.h>
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <iostream>
+#include <stdexcept>
+#include <vector>
+using namespace mm_sstv;
+namespace {
+void require(bool ok, const char* reason) { if (!ok) throw std::runtime_error(reason); }
+// Independent, symbol-at-a-time transcription of the original HS-Modem TX
+// calculation. No mm-sstv filtering or mixer helpers are used here.
+std::vector<float> reference(std::size_t symbols, unsigned seed) {
+    auto mod = modemcf_create(LIQUID_MODEM_APSK8);
+    auto carrier = nco_crcf_create(LIQUID_NCO), pilot = nco_crcf_create(LIQUID_NCO);
+    constexpr float pi = 3.14159265358979323846f;
+    nco_crcf_set_frequency(carrier, 2.f * pi * 1500.f / 48000.f);
+    nco_crcf_set_frequency(pilot, 2.f * pi * 100.f / 48000.f);
+    float tau = -.2f; while (tau < 0) tau += 1;
+    float g = 20 * tau; int ds = static_cast<int>(std::floor(g)); float dt = g - ds;
+    if (dt > .5f) { dt -= 1; ++ds; }
+    float h[601]; liquid_firdes_prototype(LIQUID_FIRFILT_RRC, 20, 15, .2f, dt, h);
+    auto filter = firinterp_crcf_create(20, h, 601);
+    std::mt19937 bits(seed);
+    std::vector<float> out; out.reserve(symbols * 20);
+    for (std::size_t i = 0; i < symbols; ++i) {
+        liquid_float_complex point{}, samples[20];
+        modemcf_modulate(mod, bits() & 7u, &point); firinterp_crcf_execute(filter, point, samples);
+        for (auto value : samples) {
+            nco_crcf_step(carrier); liquid_float_complex c{}; nco_crcf_mix_up(carrier, value, &c);
+            nco_crcf_step(pilot);
+            out.push_back(.1f * (c.real + c.imag + nco_crcf_sin(pilot) / 4.f));
+        }
+    }
+    firinterp_crcf_destroy(filter); modemcf_destroy(mod); nco_crcf_destroy(carrier); nco_crcf_destroy(pilot);
+    return out;
+}
+// Construct the symbol history that maximizes a real audio sample. This
+// checks worst-case pulse-shaping overshoot rather than trusting a random seed.
+std::vector<unsigned> peakSequence(std::size_t& target) {
+    float tau = -.2f; while (tau < 0) tau += 1;
+    float dt = 20 * tau - std::floor(20 * tau); if (dt > .5f) dt -= 1;
+    float taps[601]; liquid_firdes_prototype(LIQUID_FIRFILT_RRC, 20, 15, .2f, dt, taps);
+    auto modem = modemcf_create(LIQUID_MODEM_APSK8);
+    auto carrier = nco_crcf_create(LIQUID_NCO), pilot = nco_crcf_create(LIQUID_NCO);
+    constexpr float pi = 3.14159265358979323846f;
+    nco_crcf_set_frequency(carrier, 2.f * pi * 1500.f / 48000.f);
+    nco_crcf_set_frequency(pilot, 2.f * pi * 100.f / 48000.f);
+    liquid_float_complex points[8];
+    for (unsigned i = 0; i < 8; ++i) modemcf_modulate(modem, i, &points[i]);
+    double best = 0; std::vector<unsigned> sequence;
+    for (std::size_t n = 0; n < 2880; ++n) {
+        nco_crcf_step(carrier); nco_crcf_step(pilot);
+        if (n < 2400) continue;
+        float projection[8];
+        for (unsigned i = 0; i < 8; ++i) {
+            liquid_float_complex mixed{}; nco_crcf_mix_up(carrier, points[i], &mixed);
+            projection[i] = mixed.real + mixed.imag;
+        }
+        for (const double direction : {-1., 1.}) {
+            double amplitude = direction * .25 * nco_crcf_sin(pilot);
+            std::vector<unsigned> candidate(n / 20 + 1, 0);
+            for (std::size_t tap = n % 20; tap < 601; tap += 20) {
+                double maximum = -1e30; unsigned symbol = 0;
+                for (unsigned i = 0; i < 8; ++i) {
+                    const double value = direction * taps[tap] * projection[i];
+                    if (value > maximum) { maximum = value; symbol = i; }
+                }
+                candidate[n / 20 - tap / 20] = symbol; amplitude += maximum;
+            }
+            if (amplitude > best) { best = amplitude; sequence = candidate; target = n; }
+        }
+    }
+    modemcf_destroy(modem); nco_crcf_destroy(carrier); nco_crcf_destroy(pilot);
+    return sequence;
+}
+}
+int main() {
+    try {
+        require(TxModulator::bitRate == 7200 && TxModulator::symbolRate == 2400 &&
+                TxModulator::samplesPerSymbol == 20, "Wrong HS-Modem 7200 mode");
+        struct CountingSource : SymbolSource {
+            unsigned count = 0;
+            unsigned next() override { return count++ & 7u; }
+        } counting;
+        TxModulator clockCheck; std::vector<float> oneSecond(48000);
+        clockCheck.render(oneSecond.data(), oneSecond.size(), counting, 1);
+        require(counting.count == 2400, "Symbol clock is not 2400 symbols per second");
+        const auto expected = reference(5000, 123);
+        TxModulator a, b; RandomSymbols sa(123), sb(123);
+        std::vector<float> whole(expected.size()), chunks(expected.size());
+        a.render(whole.data(), whole.size(), sa, 1);
+        for (std::size_t at = 0; at < chunks.size();) {
+            const auto count = std::min<std::size_t>((at % 997) + 1, chunks.size() - at);
+            b.render(chunks.data() + at, count, sb, 1); at += count;
+        }
+        require(whole == chunks, "Waveform changed at audio block boundaries");
+        double cross = 0, energyReference = 0;
+        for (std::size_t i = 1000; i < whole.size(); ++i) {
+            cross += whole[i] * static_cast<double>(expected[i]);
+            energyReference += expected[i] * static_cast<double>(expected[i]);
+        }
+        const auto amplification = static_cast<float>(cross / energyReference);
+        require(amplification > 3.1734f && amplification < 3.1737f, "Unexpected full-scale calibration");
+        float maxError = 0, peak = 0;
+        for (std::size_t i = 1000; i < whole.size(); ++i) {
+            maxError = std::max(maxError, std::abs(whole[i] - expected[i] * amplification));
+            peak = std::max(peak, std::abs(whole[i]));
+        }
+        require(maxError < 1e-6f, "HS-Modem reference waveform mismatch");
+        require(peak < 1 && peak > .85f, "Unexpected peak or clipping");
+        TxModulator halfModulator; RandomSymbols halfSource(123);
+        std::vector<float> half(whole.size());
+        halfModulator.render(half.data(), half.size(), halfSource, .5f);
+        for (std::size_t i = 1000; i < half.size(); ++i)
+            require(std::abs(half[i] - whole[i] * .5f) < 1e-6f, "Gain is not linear for data and pilot");
+        std::size_t target = 0;
+        struct PeakSource : SymbolSource {
+            std::vector<unsigned> symbols; std::size_t index = 0;
+            unsigned next() override { return index < symbols.size() ? symbols[index++] : 0; }
+        } worst;
+        worst.symbols = peakSequence(target);
+        TxModulator worstModulator; std::vector<float> adversarial(target + 1000);
+        worstModulator.render(adversarial.data(), adversarial.size(), worst, 1);
+        float worstPeak = 0;
+        for (const float value : adversarial) worstPeak = std::max(worstPeak, std::abs(value));
+        require(worstPeak > .99f && worstPeak < 1.f, "100 percent does not reach full scale without clipping");
+        std::cout << "Adversarial full-scale peak " << worstPeak << "\n";
+        std::array<unsigned, 8> histogram{}; RandomSymbols random(19);
+        for (unsigned n = 0; n < 80000; ++n) ++histogram.at(random.next());
+        for (auto count : histogram) require(count > 9500 && count < 10500, "Symbol distribution is unbalanced");
+        // A source held at the center point isolates the continuously added pilot.
+        struct Center : SymbolSource { unsigned next() override { return 0; } } center;
+        TxModulator p; std::vector<float> tone(48000); p.render(tone.data(), tone.size(), center, 1);
+        double energy = 0; for (std::size_t i = 1000; i < tone.size(); ++i) energy += tone[i] * tone[i];
+        const auto rms = std::sqrt(energy / (tone.size() - 1000));
+        require(std::abs(rms - .025 * amplification / std::sqrt(2.)) < .0001, "Wrong pilot amplitude");
+        p.render(tone.data(), tone.size(), center, 0);
+        require(std::all_of(tone.begin() + 1000, tone.end(), [](float v) { return v == 0; }), "Gain zero leaves a pilot");
+        bool rejected = false; try { p.render(tone.data(), 1, center, 1.1f); } catch (const std::invalid_argument&) { rejected = true; }
+        require(rejected, "Invalid gain was accepted");
+        std::cout << "HS-Modem waveform max error " << maxError << "; peak " << peak
+                  << "; gain over original " << amplification << "; pilot RMS " << rms << "; arbitrary block boundaries identical\n";
+    } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
+}

@@ -1,0 +1,116 @@
+{
+  "source_project": "/Daten/funk/sat/QO100_TRX2",
+  "revision": "7af11b830ba83b7d497a89ca3f1492008b212cd9",
+  "files": [
+    {
+      "path": "src/hsmodem.h",
+      "sha256": "4c7094af95dd87ddc5c427ac1441cef20ea0003148974189ff96fe3f77644305"
+    },
+    {
+      "path": "src/pilot_afc.cpp",
+      "sha256": "29a20f9097f88b08c9a52537660d5e5eca1c66fcf2e7064e8ebb567972bba94a"
+    },
+    {
+      "path": "src/pilot_afc.h",
+      "sha256": "6f0d887e414dc9ade71992c645d765a3e3cbed7dee8af0abca75a83d1f448369"
+    },
+    {
+      "path": "src/rx_probe.cpp",
+      "sha256": "137f9ef04a5cf0ff4e7f8e441fd416e91f828cedbb4ad9ba13d8c5cf134d316a"
+    },
+    {
+      "path": "tests/generate_fixture.cpp",
+      "sha256": "0e59cf3b878aaea68b9ef74afd34ed4b732b2c1bec86c164de79d84cce521a97"
+    },
+    {
+      "path": "vendor/hsmodem/constellation.cpp",
+      "sha256": "12c79db8b626401179e092509089ba487221883f2a0e7b4d3be698fe419c5498"
+    },
+    {
+      "path": "vendor/hsmodem/crc16.cpp",
+      "sha256": "683987e9c1d714fe04107916d0472d6748feab7f1df38758445453d6cbc69fff"
+    },
+    {
+      "path": "vendor/hsmodem/fec/schifra_crc.hpp",
+      "sha256": "e28da8d426fef47a929d9905b6d7b6075722bfd296d5b8c7c1debf44b1bda09d"
+    },
+    {
+      "path": "vendor/hsmodem/fec/schifra_ecc_traits.hpp",
+      "sha256": "39bdf573f1907f02fc10f2022cdd2cc2b2a4e2c96bc0e49885de9b58301d4773"
+    },
+    {
+      "path": "vendor/hsmodem/fec/schifra_error_processes.hpp",
+      "sha256": "ac8c7e85b44013091e79d319dfd31aa5a3b8ad5f09794fd6dd198f0006aa27d6"
+    },
+    {
+      "path": "vendor/hsmodem/fec/schifra_fileio.hpp",
+      "sha256": "cd5ba2a5621dc9428091ef31099632c854210abc150143295d031b2f8bcd83e6"
+    },
+    {
+      "path": "vendor/hsmodem/fec/schifra_galois_field.hpp",
+      "sha256": "32ad520287c1dfbb6c051ac38f86b2df9c344c970018e76b86d941588f034ea8"
+    },
+    {
+      "path": "vendor/hsmodem/fec/schifra_galois_field_element.hpp",
+      "sha256": "c3291a0e964877684d47e9c6a65859c67fdcd60d84233ea5a742cb3ae9087105"
+    },
+    {
+      "path": "vendor/hsmodem/fec/schifra_galois_field_polynomial.hpp",
+      "sha256": "b1e1d7c9caccf189395d303128262320620606fac6a3357146fc3e2ec93e4794"
+    },
+    {
+      "path": "vendor/hsmodem/fec/schifra_reed_solomon_block.hpp",
+      "sha256": "fa2cc83a071c4148d0b75240de938c4aa14e5b0000783da8d170409e853238e1"
+    },
+    {
+      "path": "vendor/hsmodem/fec/schifra_reed_solomon_decoder.hpp",
+      "sha256": "b07337d4d74809fce5cc3a2fb7c7e516afee4ccf1df0c93993ffc3b62faa7da4"
+    },
+    {
+      "path": "vendor/hsmodem/fec/schifra_reed_solomon_encoder.hpp",
+      "sha256": "9936c4a60fede5a3064941cdbf0afa5aaacef5dcf2e7be166c95055112429a24"
+    },
+    {
+      "path": "vendor/hsmodem/fec/schifra_sequential_root_generator_polynomial_creator.hpp",
+      "sha256": "193bd52f118c9839eba4c99512139a9856b0344ce8c38cf68683c9bcf999cc70"
+    },
+    {
+      "path": "vendor/hsmodem/fec.cpp",
+      "sha256": "d9c43f7df10e44f20ed7dfc1ec41c65edb25a76a5d061c276303a15570bf4441"
+    },
+    {
+      "path": "vendor/hsmodem/frame_packer.cpp",
+      "sha256": "66983937a3abf63689a53b7c26f1bdafc3b3c5579746c37abfd35462426451db"
+    },
+    {
+      "path": "vendor/hsmodem/frameformat.h",
+      "sha256": "fcac7f2b38f1a15d7810b1e78fd5c63643520a22a850f874460cf3eff3938ae2"
+    },
+    {
+      "path": "vendor/hsmodem/scrambler.cpp",
+      "sha256": "c5847534f83a1702142b5e20caf16b7c6c98bb3e62a4005c9198b27eb2d73eff"
+    },
+    {
+      "path": "vendor/hsmodem/symboltracker.cpp",
+      "sha256": "af5c935a677766079f511a9283fd3621f696fae3c44af6d1c1eb69f057c82831"
+    },
+    {
+      "path": "vendor/hsmodem/symboltracker.h",
+      "sha256": "ce58a8de6a18baf30b2745de3726d8ee50817e7ce98ef1c226d37fff8eb4ebd9"
+    },
+    {
+      "path": "tests/test_rx.py",
+      "sha256": "c1de2f54297bfebd32b92eab2e622251ce01a3ed271fb8785b7e23ad4d134343"
+    },
+    {
+      "path": "rx_monitor.py",
+      "sha256": "59765fdce7fec159eff4b4bd025d21c469629fca74b8077fd961d5f1bf2d270e"
+    }
+  ],
+  "local_changes": {
+    "src/rx_probe.cpp": "Windows binary stdin; additional pilot_hz display field; optional --monitor output using an independent mm-sstv AudioSpectrum FFT. DSP/acquisition unchanged.",
+    "tests/generate_fixture.cpp": "Windows binary stdout.",
+    "tests/test_rx.py": "Imports the isolated spectrum test helper instead of rx_monitor.",
+    "rx_spectrum.py": "Only the original pure spectrum() function, extracted from rx_monitor.py."
+  }
+}

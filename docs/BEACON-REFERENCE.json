@@ -1,0 +1,35 @@
+{
+  "repository": "https://github.com/amsat-dl/multimedia_beacon",
+  "commit": "ce444ba3620174a02d79806555343369bb623692",
+  "analysis_date": "2026-11-19",
+  "mode": {
+    "sample_rate": 48000,
+    "symbol_rate": 2400,
+    "bits_per_symbol": 3,
+    "bit_rate": 7200,
+    "samples_per_symbol": 20,
+    "rrc_rolloff": 0.2,
+    "rrc_delay_symbols": 15,
+    "rrc_taps": 601,
+    "rrc_effective_dt": 0,
+    "carrier_hz": 1500,
+    "pilot_hz": 100
+  },
+  "sources": [
+    {
+      "path": "hsmodem/hsmodem.cpp",
+      "url": "https://github.com/amsat-dl/multimedia_beacon/blob/ce444ba3620174a02d79806555343369bb623692/hsmodem/hsmodem.cpp",
+      "sha256": "005fddc4e8777c4a3ce1d8d659fad6a33e2da52e414bac18befe9c12bebd6cb9"
+    },
+    {
+      "path": "hsmodem/liquid_if.cpp",
+      "url": "https://github.com/amsat-dl/multimedia_beacon/blob/ce444ba3620174a02d79806555343369bb623692/hsmodem/liquid_if.cpp",
+      "sha256": "1c3dfb7846c34b3a01592e5766e2ab349bb918909d4540b8a165ae1fc580bcf7"
+    },
+    {
+      "path": "hsmodem/tuning.cpp",
+      "url": "https://github.com/amsat-dl/multimedia_beacon/blob/ce444ba3620174a02d79806555343369bb623692/hsmodem/tuning.cpp",
+      "sha256": "e70390f7c3783c132b02e713ec14166ff47346466dd147faa6ce8a4ba302808f"
+    }
+  ]
+}

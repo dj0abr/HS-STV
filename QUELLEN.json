@@ -1,0 +1,691 @@
+{
+  "analysis_date": "2026-11-19",
+  "scope": "Schritt 1: Quellen- und Dokumentationsanalyse; kein mm-sstv-Programmcode",
+  "hsmodem_revision": null,
+  "hsmodem_revision_note": "Kein Git-Repository im angegebenen lokalen Bestand",
+  "qo100_trx2_revision": "7af11b830ba83b7d497a89ca3f1492008b212cd9",
+  "local_files": [
+    {
+      "path": "/Daten/funk/hsmodem/3rdParty/liquid-dsp/src/modem/src/modem_apsk.c",
+      "sha256": "20f52c7af6c0b3d5a6c2dee0070fef678f5207339a86bed08dac7397dde7b21c"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/3rdParty/liquid-dsp/src/modem/src/modem_apsk_const.c",
+      "sha256": "46115b36fb1e09b8a449db9e054a31555f09c2fd380f9a778884ec4f723e6200"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/Makefile",
+      "sha256": "eec601b3b1798072a96fa5a3f45e496fe7c109da334f5275de46ad3bd18578af"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/constellation.cpp",
+      "sha256": "12c79db8b626401179e092509089ba487221883f2a0e7b4d3be698fe419c5498"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/crc16.cpp",
+      "sha256": "1087952e2f0d6da54ab31aeecdd9f7e1ec19547b59cb4aa9854cd921c83b3374"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_crc.hpp",
+      "sha256": "e28da8d426fef47a929d9905b6d7b6075722bfd296d5b8c7c1debf44b1bda09d"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_ecc_traits.hpp",
+      "sha256": "39bdf573f1907f02fc10f2022cdd2cc2b2a4e2c96bc0e49885de9b58301d4773"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_erasure_channel.hpp",
+      "sha256": "9ddd6a7305fb257bcde00d819971a85e30bb487c726d0df181b0c94ec970b515"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_error_processes.hpp",
+      "sha256": "ac8c7e85b44013091e79d319dfd31aa5a3b8ad5f09794fd6dd198f0006aa27d6"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_fileio.hpp",
+      "sha256": "cd5ba2a5621dc9428091ef31099632c854210abc150143295d031b2f8bcd83e6"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_galois_field.hpp",
+      "sha256": "32ad520287c1dfbb6c051ac38f86b2df9c344c970018e76b86d941588f034ea8"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_galois_field_element.hpp",
+      "sha256": "c3291a0e964877684d47e9c6a65859c67fdcd60d84233ea5a742cb3ae9087105"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_galois_field_polynomial.hpp",
+      "sha256": "b1e1d7c9caccf189395d303128262320620606fac6a3357146fc3e2ec93e4794"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_galois_utilities.hpp",
+      "sha256": "474370e8a0d595fc1bee31d0779461ddb41cf335023be8ce5f63fac1c66c5e41"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_reed_solomon_bitio.hpp",
+      "sha256": "e5f4f7a6d2c01fdf16ba158bc7eb841f7dbf1a5b1e6b8be87a681b462b890869"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_reed_solomon_block.hpp",
+      "sha256": "fa2cc83a071c4148d0b75240de938c4aa14e5b0000783da8d170409e853238e1"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_reed_solomon_codec_validator.hpp",
+      "sha256": "ef5a3378202d96995ce908105a8c010397267d7a1b1d3b54b5d9b5a91d0cce6a"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_reed_solomon_decoder.hpp",
+      "sha256": "b07337d4d74809fce5cc3a2fb7c7e516afee4ccf1df0c93993ffc3b62faa7da4"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_reed_solomon_encoder.hpp",
+      "sha256": "9936c4a60fede5a3064941cdbf0afa5aaacef5dcf2e7be166c95055112429a24"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_reed_solomon_file_decoder.hpp",
+      "sha256": "6e3c030e7af77c015a6a0274c822eb41be45cf5332ec7563ee400b1c92302715"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_reed_solomon_file_encoder.hpp",
+      "sha256": "15ee8183083f4ef41cbf54998bed1b22779d56e9e4ffdd51fd1951b694b40b88"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_reed_solomon_file_interleaver.hpp",
+      "sha256": "35c737f09df933fd9dbe2d80d12aacc974568cdda14b560ec8bc5f0c7d6e8d59"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_reed_solomon_general_codec.hpp",
+      "sha256": "875c88c3df0c6c774178ec4ca145bc8f3a8e432bf8efa19103a194546dc3655a"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_reed_solomon_interleaving.hpp",
+      "sha256": "a5ad14955de063d981e963dd8ffb3a10433ddcb535ddc38b8b74adaa4e7ed30d"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_reed_solomon_product_code.hpp",
+      "sha256": "1ea307d30e345d7c37bef9f3838bae2d38c8ced4b34916e64f3e409c3467c800"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_reed_solomon_speed_evaluator.hpp",
+      "sha256": "6b347030d758424d2859d8463c71ba0398ef7cc557eb551ebd739b4712c13f41"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_sequential_root_generator_polynomial_creator.hpp",
+      "sha256": "193bd52f118c9839eba4c99512139a9856b0344ce8c38cf68683c9bcf999cc70"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec/schifra_utilities.hpp",
+      "sha256": "3d6ac30ebc7c41dc054351f1e8766d6ef9b31d3fab0470d12070f04f9796700c"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/fec.cpp",
+      "sha256": "14ad6ff9cfed0ba47605d6919538eca7c0888a8a67bc06fa192c53babe6d5ecd"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/filesend.cpp",
+      "sha256": "c65630fbc1b79189b06aec090fda006971f8831ec8a7ef403b0604e9154d4d9e"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/frame_packer.cpp",
+      "sha256": "acaa02c66e7d00b8e22e854c0d42196fe336377c23fa2a000a470532bbb341a2"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/frameformat.h",
+      "sha256": "fcac7f2b38f1a15d7810b1e78fd5c63643520a22a850f874460cf3eff3938ae2"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/hsmodem.cpp",
+      "sha256": "005fddc4e8777c4a3ce1d8d659fad6a33e2da52e414bac18befe9c12bebd6cb9"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/hsmodem.h",
+      "sha256": "794f07d5873ff29de55bc82eb6a3387bb28fc91f65178c11eceaa40f3b6765fe"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/libkmaudio/libkmaudio.cpp",
+      "sha256": "2a7bc2eb9dcc644c5a6b1868161df49c94b7b99bdcf28df507a5b7107b00443b"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/libkmaudio/libkmaudio.h",
+      "sha256": "c9e56a8fc561dbb9d626520c2fd08843f7c127d3faad385adb360b0a138eef38"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/libkmaudio/libkmaudio_capture.cpp",
+      "sha256": "1adad9acf967137a232a9b893d1def437fd17d7cc01342c10236b3461b0c2708"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/libkmaudio/libkmaudio_capture_linux.cpp",
+      "sha256": "645855579440aa7dd2ef3624f592309b85924d14e470484d3459e404d5f2b699"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/libkmaudio/libkmaudio_fifo.cpp",
+      "sha256": "ad1bd314034bc6e4790a131998e2a7b2a21971037aae5682319c8899c73420d8"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/libkmaudio/libkmaudio_getDevices.cpp",
+      "sha256": "4fa33fbbdd25d0422e232968e3f5ea65019ccfb616506618291b0dd7e8d19153"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/libkmaudio/libkmaudio_getDevices_Linux.cpp",
+      "sha256": "bae5aaa04b014f3f580098852019bcb1b202af709825d53e8dcee195c908d3a9"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/libkmaudio/libkmaudio_init.cpp",
+      "sha256": "ba9ab7e7f96e20b394e11935b94e32461dc731af4b59c6c92893a344c2f3e20e"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/libkmaudio/libkmaudio_init_linux.cpp",
+      "sha256": "6a03455a36d31e0d8350515bade9654f2c73e9a6d6bdb82a6a6de70dcfd03d9c"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/libkmaudio/libkmaudio_interface.cpp",
+      "sha256": "09fe44887dc343c0af4498e238891d91fbfd93688f81edfc4993b5501e769d70"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/libkmaudio/libkmaudio_playback.cpp",
+      "sha256": "fc8034638132f6361287003786204f94941a9a20fbfc0f92b802eac0994c0c9d"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/libkmaudio/libkmaudio_playback_linux.cpp",
+      "sha256": "013b4af3c4901944980e635bbf3b2675acce7e9de9979084532edc252dd9218a"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/libkmaudio/libkmaudio_resampler.cpp",
+      "sha256": "e22ee8c901b19fbb15e36f08fa95c85076c4691852042e569aad4a63db0a3b02"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/liquid_if.cpp",
+      "sha256": "1c3dfb7846c34b3a01592e5766e2ab349bb918909d4540b8a165ae1fc580bcf7"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/scrambler.cpp",
+      "sha256": "3f798953ce56313bbbfb14d402018afe969f442ea9c2699ee591f852fff7131a"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/hsmodem/tuning.cpp",
+      "sha256": "e70390f7c3783c132b02e713ec14166ff47346466dd147faa6ce8a4ba302808f"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/oscardata/oscardata/ArraySend.cs",
+      "sha256": "05c9ceaa4bf5e6510070dd3e516e167b16e0347112c8e9dc665f97646c046a33"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/oscardata/oscardata/Form1.cs",
+      "sha256": "406909064a6d24e376aeab1f48a06a3fa1d273ee7e4c1bb7f62f813a80590920"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/oscardata/oscardata/config.cs",
+      "sha256": "c1768956db0ee10e18d9c48bd22ddf2e5dbc80e7c79f0db7f1c144a96d43a533"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/oscardata/oscardata/crc.cs",
+      "sha256": "1e91dbb044b6b0805758e54cf05991632843864fc4fe3746405dd2b4c92fc75a"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/oscardata/oscardata/imagehandler.cs",
+      "sha256": "b0ea32f953f9c343b1f5477bf2699872cdfb38b47fc6f80d32dca90866537bb4"
+    },
+    {
+      "path": "/Daten/funk/hsmodem/oscardata/oscardata/receivefile.cs",
+      "sha256": "25f8d1c3bdd80de44ef3091372758755180eb476530fbf0036199d351555deaa"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/CMakeLists.txt",
+      "sha256": "7a4b76a79bdba7f329034cc8f3dcd4c3ccc6ee5c914a1256d360e8172af7e302"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/audio/digital_audio.cpp",
+      "sha256": "4833b2aa7c21f1101b9b7b06b9a545ef530e5ace3d1ea64da8b8d990ff006d2c"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/build/bin/qo100_mm_fixture",
+      "sha256": "63240a39885c359e44ee24fa0ae73308fa5948473ceb56f63f39bbf97761e136"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/build/bin/qo100_mm_probe",
+      "sha256": "b04962a716cb35372c478a57a2cd81065fccbffc3aff77f2871cc506e7b30ea0"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/docs/digital-audio.md",
+      "sha256": "c924d52bf67145b9ec08346e3305b8e69453d52b4645dc73fadf60ee80894240"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/docs/mm-beacon.md",
+      "sha256": "26f6f3d80f104fc6e71f7304574469603210249588e45f23b75c8b9e29f11ae3"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/liquid-dsp-1.8.3/README.md",
+      "sha256": "cbd1e737ad471413f2ffecc6f403e17bd5068dc8eb8144be05607148ad489231"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/liquid-dsp-1.8.3/include/liquid/liquid.h",
+      "sha256": "46504495da2f510404d6c4c2a4d9116e01eaab89e60aed511823268c706f1c1a"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/liquid-dsp-1.8.3/lib/linux-x86_64/libliquid.so.1.8.3",
+      "sha256": "a5a91d1d5459531c039218850bdac632bf0f93fa84f0050f9bd9e1c288d14dec"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/liquid-dsp-1.8.3/manifest-linux-x86_64.json",
+      "sha256": "62e7c62865b4604fff8ae7d4f197ba065b5c2174fa14c7467b386dcf01ef1fd4"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/mmdecoder/CMakeLists.txt",
+      "sha256": "7954bf4916613fbc5e19669ce60a0bcd87ef25ebe4de254c808d81526d90b8f2"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/mmdecoder/LICENSE",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/mmdecoder/UPSTREAM.md",
+      "sha256": "43cc0d7da8e3c04b7a634c91d733fff6e09ddd4b7db53bf8df258ac5c77f089b"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/mmdecoder/src/pilot_afc.cpp",
+      "sha256": "29a20f9097f88b08c9a52537660d5e5eca1c66fcf2e7064e8ebb567972bba94a"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/mmdecoder/src/rx_probe.cpp",
+      "sha256": "137f9ef04a5cf0ff4e7f8e441fd416e91f828cedbb4ad9ba13d8c5cf134d316a"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/mmdecoder/tests/generate_fixture.cpp",
+      "sha256": "0e59cf3b878aaea68b9ef74afd34ed4b732b2c1bec86c164de79d84cce521a97"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/mmdecoder/tests/test_rx.py",
+      "sha256": "c1de2f54297bfebd32b92eab2e622251ce01a3ed271fb8785b7e23ad4d134343"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/mmdecoder/vendor/hsmodem/constellation.cpp",
+      "sha256": "12c79db8b626401179e092509089ba487221883f2a0e7b4d3be698fe419c5498"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/mmdecoder/vendor/hsmodem/crc16.cpp",
+      "sha256": "683987e9c1d714fe04107916d0472d6748feab7f1df38758445453d6cbc69fff"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/mmdecoder/vendor/hsmodem/fec.cpp",
+      "sha256": "d9c43f7df10e44f20ed7dfc1ec41c65edb25a76a5d061c276303a15570bf4441"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/mmdecoder/vendor/hsmodem/frame_packer.cpp",
+      "sha256": "66983937a3abf63689a53b7c26f1bdafc3b3c5579746c37abfd35462426451db"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/mmdecoder/vendor/hsmodem/frameformat.h",
+      "sha256": "fcac7f2b38f1a15d7810b1e78fd5c63643520a22a850f874460cf3eff3938ae2"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/mmdecoder/vendor/hsmodem/scrambler.cpp",
+      "sha256": "c5847534f83a1702142b5e20caf16b7c6c98bb3e62a4005c9198b27eb2d73eff"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/external/mmdecoder/vendor/hsmodem/symboltracker.cpp",
+      "sha256": "af5c935a677766079f511a9283fd3621f696fae3c44af6d1c1eb69f057c82831"
+    },
+    {
+      "path": "/Daten/funk/sat/QO100_TRX2/src/tx_channel.cpp",
+      "sha256": "5cde30ad2d949a7e7f1697f60d91fdba9fd5b1bc90ca385f48b232a4bc075c2c"
+    }
+  ],
+  "wiki_navigation_pages": [
+    {
+      "id": "de:hsmodem:start",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:start#dokuwiki__top",
+      "navigation_label": "Nach oben",
+      "status": "read",
+      "extracted_text_sha256": "72bd38953b2083bcce27de7dcc8747148f4775d27a629d7429607e4ab57b6571"
+    },
+    {
+      "id": "en:hsmodem:start",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=en:hsmodem:start",
+      "navigation_label": "English (en)",
+      "status": "read",
+      "extracted_text_sha256": "d662f35501d10872484b2bb5a9a8c39bc8e1afde7a87353357242d1f590fc379"
+    },
+    {
+      "id": "de:hsmodem:div",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:div",
+      "navigation_label": "Frequenzabstimmung",
+      "status": "read",
+      "extracted_text_sha256": "42c5d4ea157274e46b5f0fbe261a8bd702990e8780008d3b185991c69d4567e5"
+    },
+    {
+      "id": "de:hsmodem:raspi",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:raspi",
+      "navigation_label": "Raspberry",
+      "status": "read",
+      "extracted_text_sha256": "0439acb3fb9d06ccd2813b9ff0afc9e9cfa040d6e886019ca7448badda83ba7c"
+    },
+    {
+      "id": "de:hsmodem:voice",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:voice",
+      "navigation_label": "DV Betriebsarten",
+      "status": "read",
+      "extracted_text_sha256": "6c6e327e066c0449f186b2f83423576bdfe978a58d5df0ae69c63df9a41706a2"
+    },
+    {
+      "id": "de:hsmodem:streaming_beacon",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:streaming_beacon",
+      "navigation_label": "QO100 Multimedia Bake",
+      "status": "read",
+      "extracted_text_sha256": "95bd531eefb3ba6d49735f800967a7a7837cedeb3b537f8e40cdbcaa969b3189"
+    },
+    {
+      "id": "de:hsmodem:techvorgaben",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:techvorgaben",
+      "navigation_label": "Techn. Vorgaben und Grenzen",
+      "status": "read",
+      "extracted_text_sha256": "89f56cb4d20b53e242d06b6d0a6af954c065ab2579b473c5ec4e041f72fe72f0"
+    },
+    {
+      "id": "de:hsmodem:modecomp",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:modecomp",
+      "navigation_label": "Betriebsartenvergleich",
+      "status": "read",
+      "extracted_text_sha256": "5c931034100d0369891d8a2d4bfae162dc83fa8fbf6cb3db526217ca593a5d36"
+    },
+    {
+      "id": "de:hsmodem:techdata",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:techdata",
+      "navigation_label": "Technische Daten",
+      "status": "read",
+      "extracted_text_sha256": "90f335acee1085052f42f6596b6a27d2a685b5bd14c0290babfd575d4dac19ad"
+    },
+    {
+      "id": "de:hsmodem:anftrx",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:anftrx",
+      "navigation_label": "Anforderungen Transceiver",
+      "status": "read",
+      "extracted_text_sha256": "b6c12c983b5d921633f06c87417f37f6e4b9d02211a1091f3b48356764d540ad"
+    },
+    {
+      "id": "de:hsmodem:txtime",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:txtime",
+      "navigation_label": "Übertragungszeiten",
+      "status": "read",
+      "extracted_text_sha256": "2fa4a09f36a1a5082a22af290e729585693b37f10b9b4fc17e288d17a7c24ee0"
+    },
+    {
+      "id": "de:hsmodem:structur",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:structur",
+      "navigation_label": "Modem Struktur",
+      "status": "read",
+      "extracted_text_sha256": "3dd574dd05520bfd06de68086d972c305b3669b91da28b8ec044c7edb454e247"
+    },
+    {
+      "id": "de:hsmodem:praxis",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:praxis",
+      "navigation_label": "Praxishinweise",
+      "status": "read",
+      "extracted_text_sha256": "f88ebe58c48f9a3f80ca0db0e7f3a20a97018def98a313a5cfe8a55db790887d"
+    },
+    {
+      "id": "de:hsmodem:installwin",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:installwin",
+      "navigation_label": "Installation Windows",
+      "status": "read",
+      "extracted_text_sha256": "b372f060f55456f1ebe4f78bf84ee8fdc587905b36f7c9c7b14d57d99b93ef50"
+    },
+    {
+      "id": "de:hsmodem:installlinux",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:installlinux",
+      "navigation_label": "Installation Linux",
+      "status": "read",
+      "extracted_text_sha256": "1eb8d81c8e89ef813973c5b34a447b26fb08adab7f4c2a0f019ed2d2ee810efc"
+    },
+    {
+      "id": "de:hsmodem:transceiveranschluss",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:transceiveranschluss",
+      "navigation_label": "an Transceiver",
+      "status": "read",
+      "extracted_text_sha256": "77898408f90a28d4cc0b3170f0594c05e5678797b0802b565c6bba196b05a83a"
+    },
+    {
+      "id": "de:hsmodem:sdranschluss",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:sdranschluss",
+      "navigation_label": "an SDR Lösungen",
+      "status": "read",
+      "extracted_text_sha256": "1e8c418c6284f6a6ac8f466f6e4332fd5a838a417c0f9b7e747a70bf7d1b18e1"
+    },
+    {
+      "id": "de:hsmodem:sbcanschluss",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:sbcanschluss",
+      "navigation_label": "an SBC (Raspi, Odroid..)",
+      "status": "read",
+      "extracted_text_sha256": "49df6a428c94c0bc4de8a2747bff8107756b8791f6694f66264342fa72673133"
+    },
+    {
+      "id": "de:hsmodem:virtualsound",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:virtualsound",
+      "navigation_label": "virtuelle Audiokabel",
+      "status": "read",
+      "extracted_text_sha256": "c00f9eebc2f7faffa45df2eaf4037e6e483a78187bad2570292f115464d8ef30"
+    },
+    {
+      "id": "de:hsmodem:gui",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:gui",
+      "navigation_label": "Benutzeroberfläche",
+      "status": "read",
+      "extracted_text_sha256": "8a82db1e6c3453e5a7b4f3071e760ab663fdb926c8eaf85581c4bfb7f0e66214"
+    },
+    {
+      "id": "de:hsmodem:setup",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:setup",
+      "navigation_label": "SETUP: Konfiguration",
+      "status": "read",
+      "extracted_text_sha256": "bea0745b459ca648953b4e5e85ed3cf364e1ff67ae0911457796bb5443453d42"
+    },
+    {
+      "id": "de:hsmodem:bertest",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:bertest",
+      "navigation_label": "BER: RX/RX Testdaten",
+      "status": "read",
+      "extracted_text_sha256": "d36de109a2064d5432c2735ba999774c905b419c1ac6d2ff9acb256146476cd5"
+    },
+    {
+      "id": "de:hsmodem:rxtximage",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:rxtximage",
+      "navigation_label": "Bilder: RX&TX",
+      "status": "read",
+      "extracted_text_sha256": "f5410d05fc0d90726ac2552275030e7ba8f857ca70905bdfc5f87aaf25a11061"
+    },
+    {
+      "id": "de:hsmodem:rxtxfile",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:rxtxfile",
+      "navigation_label": "Dateien: RX&TX",
+      "status": "read",
+      "extracted_text_sha256": "7722eaeb4b08217fdf27b11f1c53e91d73c88d73bb5b816b8186535ccfd8e43e"
+    },
+    {
+      "id": "de:hsmodem:dvmode",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:dvmode",
+      "navigation_label": "Digital Voice (experimental)",
+      "status": "read",
+      "extracted_text_sha256": "666dd6b5742f674170fa63cfb4c7f864b985608bf44ce6820bf193a830b2438c"
+    },
+    {
+      "id": "de:hsmodem:rtty",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:rtty",
+      "navigation_label": "RTTY",
+      "status": "read",
+      "extracted_text_sha256": "fc76384a134711475ec63b6247186ec440c50860cc430bd8e578958c78d58039"
+    },
+    {
+      "id": "de:hsmodem:streaming_intro",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:streaming_intro",
+      "navigation_label": "Einführung",
+      "status": "read",
+      "extracted_text_sha256": "22e059194f21ca8e0cdb5705c54067cd28d47a71bc4f3a69d40400415f22ea12"
+    },
+    {
+      "id": "de:hsmodem:streaming_usage",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:streaming_usage",
+      "navigation_label": "Bedienung RX",
+      "status": "read",
+      "extracted_text_sha256": "5bb91b8cf38de154f0597b204a4aff9f25f3105306bd0ea020cecaa3416bfc49"
+    },
+    {
+      "id": "de:hsmodem:transceiver",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:transceiver",
+      "navigation_label": "Transceiver",
+      "status": "read",
+      "extracted_text_sha256": "cb07694643a4415e7dd4e4c5a4b0802438bb1665c05805e11cf7a862d303f786"
+    },
+    {
+      "id": "de:hsmodem:icomusb",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:icomusb",
+      "navigation_label": "ICOM: USB",
+      "status": "read",
+      "extracted_text_sha256": "0c46aa1e8c7db1d21286b9ff217ecbc8fda86ed99ee1a673db14011e6b05ed06"
+    },
+    {
+      "id": "de:hsmodem:icomfilter",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:icomfilter",
+      "navigation_label": "ICOM: Filter",
+      "status": "read",
+      "extracted_text_sha256": "1a40bb96fc9f4330d7095d3fcd7dc349d40ccbe1f9fece1ff16ddf65e2dc8ede"
+    },
+    {
+      "id": "de:hsmodem:icomfrequenz",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:icomfrequenz",
+      "navigation_label": "ICOM: Frequenz",
+      "status": "read",
+      "extracted_text_sha256": "642b070d0faad4cc03d5fb527810d067133409e73db0e4e6f1d2e0c57d750b32"
+    },
+    {
+      "id": "de:hsmodem:icomlevel",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:icomlevel",
+      "navigation_label": "ICOM: TX/RX-Pegel",
+      "status": "read",
+      "extracted_text_sha256": "83c9fa29ac03d2f75e45e828ce741fd8ab5b420191e9032bd393bd616c7f7559"
+    },
+    {
+      "id": "de:hsmodem:sdrconsole",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:sdrconsole",
+      "navigation_label": "Typisches Setup",
+      "status": "read",
+      "extracted_text_sha256": "a437697ce328a9acac7581cb35808bf9978200ce8685c7c8bc36102f105e2df7"
+    },
+    {
+      "id": "de:hsmodem:sdrconsolevac",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:sdrconsolevac",
+      "navigation_label": "Virtuelles Audiokabel",
+      "status": "read",
+      "extracted_text_sha256": "fe3188981dc9884889c4f12022f13e948c88f2e124923ff50401497e34feca33"
+    },
+    {
+      "id": "de:hsmodem:sdrconsolesetup",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:sdrconsolesetup",
+      "navigation_label": "SDR-Konsole Einstellungen",
+      "status": "read",
+      "extracted_text_sha256": "850468b8423676225bdf843102076670f3a7a687d4e0e66b6f975e86e4e7222a"
+    },
+    {
+      "id": "de:hsmodem:sdrconsolehssetup",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:sdrconsolehssetup",
+      "navigation_label": "HSmodem Einstellungen",
+      "status": "read",
+      "extracted_text_sha256": "2e0d06bf2bbe014dbbd14ca45d63cfce24b941a8001e09d3d280cb1163748375"
+    },
+    {
+      "id": "de:hsmodem:sdrconsolebetrieb",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:sdrconsolebetrieb",
+      "navigation_label": "Betrieb in der Praxis",
+      "status": "read",
+      "extracted_text_sha256": "456b77c64e3fc4e213234d841dfd9cfb39f7024f97d4e782a9812d79e9927bdb"
+    },
+    {
+      "id": "de:hsmodem:sdrconsolepluto",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:sdrconsolepluto",
+      "navigation_label": "Betrieb mit Adalm Pluto",
+      "status": "read",
+      "extracted_text_sha256": "239516f67310846f0125dafe34c429361ff6cc1e84c9f417db0de085bac9c02a"
+    },
+    {
+      "id": "en:hsmodem:ota",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=en:hsmodem:ota",
+      "navigation_label": "Physical parameters",
+      "status": "read",
+      "extracted_text_sha256": "e125e1102b0987e4e94d944ce732e422896667b1a7daaec76c85b3977cc0a879"
+    },
+    {
+      "id": "en:hsmodem:scrambler",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=en:hsmodem:scrambler",
+      "navigation_label": "Frame Coding/Decoding",
+      "status": "read",
+      "extracted_text_sha256": "f0a5e1adae17bd49077ba2f542c7e22e077d929c65d01a7b907e9acec7ba86de"
+    },
+    {
+      "id": "en:hsmodem:packer",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=en:hsmodem:packer",
+      "navigation_label": "Frame Format",
+      "status": "read",
+      "extracted_text_sha256": "f1caa9ea3f9e886697df49e662f6a8d17ac80a7d741534ff710e615a72b44bc7"
+    },
+    {
+      "id": "en:hsmodem:guiinterf",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=en:hsmodem:guiinterf",
+      "navigation_label": "GUI Interface: UDP/IP/Initialization",
+      "status": "read",
+      "extracted_text_sha256": "df5e3f604d9796e0f398f4d3450896c5dccee3431e0086f10ca48e02236ff3ed"
+    },
+    {
+      "id": "en:hsmodem:guidata",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=en:hsmodem:guidata",
+      "navigation_label": "Data Transfer: App>Modem",
+      "status": "read",
+      "extracted_text_sha256": "94c33adbfbdb4397e30efa18dad7554321a1bfc430a838aa4bb044cb0e602ccf"
+    },
+    {
+      "id": "en:hsmodem:filetx",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=en:hsmodem:filetx",
+      "navigation_label": "Data Transfer: File Format",
+      "status": "read",
+      "extracted_text_sha256": "6aeae35b9212b3169a5cba7426a162bf4563ef468ea6f310cd807b80a1b85cf8"
+    },
+    {
+      "id": "en:hsmodem:guirx",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=en:hsmodem:guirx",
+      "navigation_label": "Data Transfer: Modem>App",
+      "status": "read",
+      "extracted_text_sha256": "20944dfc7046a5ad4ad7b156a1df057a6de6fd4f8108c6c297f19a90186b301d"
+    },
+    {
+      "id": "en:hsmodem:extdata",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=en:hsmodem:extdata",
+      "navigation_label": "External Data Interface",
+      "status": "read",
+      "extracted_text_sha256": "f226b23d06c8e30a7948e5c4612deaa0813403110ff79cdf45df6043c56922f0"
+    },
+    {
+      "id": "de:hsmodem:impressum",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:impressum",
+      "navigation_label": "Impressum",
+      "status": "missing_page",
+      "extracted_text_sha256": "4cdc09487a36d92e210d713094cdf39ef0339820ecd557c6a942391919b88d8f"
+    },
+    {
+      "id": "de:hsmodem:datenschutz",
+      "url": "https://wiki.amsat-dl.org/doku.php?id=de:hsmodem:datenschutz",
+      "navigation_label": "Datenschutzerklärung",
+      "status": "missing_page",
+      "extracted_text_sha256": "4cdc09487a36d92e210d713094cdf39ef0339820ecd557c6a942391919b88d8f"
+    }
+  ],
+  "additional_sources": [
+    "https://doc.qt.io/qt-6/qaudiosink.html",
+    "https://doc.qt.io/qt-6/qmediadevices.html",
+    "https://www.schifra.com/license.html"
+  ],
+  "offline_validation": {
+    "suite": "external/mmdecoder/tests/test_rx.py",
+    "tests": 16,
+    "result": "OK",
+    "seconds": 3.627,
+    "scope": "Vorhandene Referenzprogramme, synthetisches Audio, keine Soundkarte oder HF",
+    "command": "PYTHONDONTWRITEBYTECODE=1 QO100_MM_PROBE=/Daten/funk/sat/QO100_TRX2/build/bin/qo100_mm_probe QO100_MM_FIXTURE=/Daten/funk/sat/QO100_TRX2/build/bin/qo100_mm_fixture /usr/bin/python3 -m unittest discover -s /Daten/funk/sat/QO100_TRX2/external/mmdecoder/tests -p test_rx.py -v"
+  }
+}
