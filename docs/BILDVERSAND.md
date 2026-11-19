@@ -1,5 +1,9 @@
 # Bildversand und gültige Testframes – Version 0.2
 
+Historischer Prüfbericht des 7200-bit/s-Stands. Aktuell senden und empfangen wir
+auf Benutzerwunsch mit 6000 bit/s; siehe [EMPFANG.md](EMPFANG.md) und
+[PROVENANCE.md](PROVENANCE.md).
+
 Stand des Bildsenders: 19.11.2026. Der spätere Empfang ist in [EMPFANG.md](EMPFANG.md) dokumentiert. Physikalischer Modus unverändert: 8APSK 7200 bit/s,
 2400 Symbole/s, 48 kHz. 100 % bleibt digitale Vollaussteuerung. Der Screenshot
 des Benutzers zeigte die erwartete 1+7-Konstellation und einen Pilotversatz von

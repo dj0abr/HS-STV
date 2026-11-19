@@ -93,7 +93,7 @@ ImageTransmission prepareImage(const std::vector<std::uint8_t>& jpeg, std::strin
         std::copy_n(content.begin() + at, count, payload.begin());
         const unsigned status = result.fileFrames == 1 ? 3 : frame == 0 ? 0 : frame + 1 == result.fileFrames ? 2 : 1;
         const auto air = encoder.encode(payload, 2, status, frame);
-        // Original cold-start acquisition: first send plus 21 repeats (~6.3 s).
+        // Original cold-start acquisition: first send plus 21 repeats (~7.6 s at 6000 bit/s).
         const unsigned copies = frame == 0 ? 22 : frame + 1 == result.fileFrames ? 6 : 1;
         for (unsigned copy = 0; copy < copies; ++copy) result.frames.push_back(air);
     }

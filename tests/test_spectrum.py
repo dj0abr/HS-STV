@@ -25,18 +25,18 @@ with tempfile.TemporaryDirectory(prefix='mm-sstv-spectrum-') as folder:
     assert .078 < pilot_amplitude < .081, pilot_amplitude
     # Windowed measurement of the data band, excluding pilot and its neighborhood.
     power = np.abs(np.fft.rfft(x * np.hanning(len(x)))) ** 2
-    inside = (frequency >= 40) & (frequency <= 2960)
+    inside = (frequency >= 280) & (frequency <= 2720)
     outside = (frequency > 20) & ~inside & (abs(frequency - 100) > 30)
     leakage = float(power[outside].sum() / power[inside].sum())
     assert leakage < .002, leakage
-    data = (frequency >= 60) & (frequency <= 2940) & (abs(frequency - 100) > 30)
+    data = (frequency >= 300) & (frequency <= 2700) & (abs(frequency - 100) > 30)
     centroid = float((power[data] * frequency[data]).sum() / power[data].sum())
     assert 1430 < centroid < 1570, centroid
-    # 7200 bit/s must retain the additional edges beyond the old 6000-mode band.
+    # 6000 bit/s must no longer occupy the wider 7200-mode edges.
     low_edge = (frequency >= 100) & (frequency <= 240) & (abs(frequency - 100) > 30)
     high_edge = (frequency >= 2760) & (frequency <= 2900)
-    assert power[low_edge].sum() / power[data].sum() > .001, 'Low 7200-mode edge missing'
-    assert power[high_edge].sum() / power[data].sum() > .001, 'High 7200-mode edge missing'
+    assert power[low_edge].sum() / power[data].sum() < .0001, 'Data spills into the low 7200-mode edge'
+    assert power[high_edge].sum() / power[data].sum() < .0001, 'Data spills into the high 7200-mode edge'
     print(f'Pilot {pilot_hz:.1f} Hz, amplitude {pilot_amplitude:.5f}; data centroid {centroid:.1f} Hz; out-of-band ratio {leakage:.6f}')
     subprocess.run([sys.argv[1], str(path), '1', '0'], check=True)
     with wave.open(str(path)) as wav:

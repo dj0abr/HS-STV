@@ -108,8 +108,8 @@
     }
   ],
   "local_changes": {
-    "src/rx_probe.cpp": "Windows binary stdin; additional pilot_hz display field; optional --monitor output using an independent mm-sstv AudioSpectrum FFT. DSP/acquisition unchanged.",
-    "tests/generate_fixture.cpp": "Windows binary stdout.",
+    "src/rx_probe.cpp": "Windows binary stdin; pilot_hz display; optional independent monitor FFT; HS-Modem 6000-bit/s mode with RX predecimation 6 and PLL-rate conversion 4000 Hz. Pilot acquisition and frame decoding algorithms unchanged.",
+    "tests/generate_fixture.cpp": "Windows binary stdout; independent waveform generator configured for HS-Modem 6000 bit/s (24 samples/symbol, 721 RRC taps).",
     "tests/test_rx.py": "Imports the isolated spectrum test helper instead of rx_monitor.",
     "rx_spectrum.py": "Only the original pure spectrum() function, extracted from rx_monitor.py."
   }

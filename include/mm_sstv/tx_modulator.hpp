@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "modem_mode.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -22,10 +23,10 @@ private:
 // Keep one instance for the whole transmission, including partial symbols.
 class TxModulator {
 public:
-    static constexpr unsigned sampleRate = 48000;
-    static constexpr unsigned symbolRate = 2400;
+    static constexpr unsigned sampleRate = ModemMode::sampleRate;
+    static constexpr unsigned symbolRate = ModemMode::symbolRate;
     static constexpr unsigned samplesPerSymbol = sampleRate / symbolRate;
-    static constexpr unsigned bitRate = symbolRate * 3;
+    static constexpr unsigned bitRate = ModemMode::bitRate;
     static constexpr unsigned carrierHz = 1500;
     static constexpr unsigned pilotHz = 100;
     static_assert(sampleRate % symbolRate == 0, "Symbol rate must divide sample rate");

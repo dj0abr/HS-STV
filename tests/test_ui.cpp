@@ -4,7 +4,6 @@
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
-#include <QCheckBox>
 #include "mm_sstv/image_audio.hpp"
 #include <QDialog>
 #include <QDragEnterEvent>
@@ -45,20 +44,23 @@ public:
 private:
     State& state_;
 };
-struct CaptureState { bool open = false; AudioInput::Consume consume; std::string chosen; };
+struct CaptureState { bool open = false, failStart = false; unsigned starts = 0; AudioInput::Consume consume; std::string chosen, error; };
 class FakeCapture final : public AudioInput {
 public:
     explicit FakeCapture(CaptureState& state) : state_(state) {}
     std::vector<AudioDevice> devices() override { return {{"fromQO100", "fromQO100"}, {"other-input", "Other input"}}; }
-    void start(const std::string& device, Consume consume) override { state_.open = true; state_.chosen = device; state_.consume = std::move(consume); }
+    void start(const std::string& device, Consume consume) override {
+        ++state_.starts; if (state_.failStart) throw std::runtime_error("Input disconnected");
+        state_.error.clear(); state_.open = true; state_.chosen = device; state_.consume = std::move(consume);
+    }
     void stop() noexcept override { state_.open = false; state_.consume = {}; }
-    std::string error() const override { return {}; }
+    std::string error() const override { return state_.error; }
 private:
     CaptureState& state_;
 };
 QString picture(QTemporaryDir& dir) {
     QImage image(400, 200, QImage::Format_RGB32); image.fill(QColor(20, 40, 230));
-    const auto path = dir.filePath("example.png"); if (!image.save(path)) throw std::runtime_error("Cannot write test image");
+    const auto path = dir.filePath("Rundfunkmuseum_Besichtigung_Cham_Radio_Sender.png"); if (!image.save(path)) throw std::runtime_error("Cannot write test image");
     return path;
 }
 class UiTest : public QObject {
@@ -70,7 +72,7 @@ private slots:
             MainWindow window(std::make_unique<FakeOutput>(state), settings); window.show();
             auto* button = window.findChild<QPushButton*>("transmitButton"); QVERIFY(button); QVERIFY(!button->isEnabled());
             QVERIFY(window.loadImage(picture(dir))); QVERIFY(button->isEnabled());
-            QVERIFY(window.findChild<QLabel*>("modulationInfo")->text().contains("7200 bit/s"));
+            QVERIFY(window.findChild<QLabel*>("modulationInfo")->text().contains("6000 bit/s"));
             QTest::qWait(50);
             const auto screenshot = qEnvironmentVariable("MM_SSTV_SCREENSHOT", dir.filePath("window.png")); QVERIFY(window.grab().save(screenshot));
             QTest::mouseClick(button, Qt::LeftButton); QCOMPARE(state.chosen, std::string("toQO100"));
@@ -86,7 +88,7 @@ private slots:
         state.devices = {{"other", "Other output"}};
         MainWindow window(std::make_unique<FakeOutput>(state), settings); QVERIFY(window.loadImage(picture(dir)));
         QVERIFY(!window.findChild<QPushButton*>("transmitButton")->isEnabled());
-        QVERIFY(!window.findChild<QAction*>("validFrameTest")->isEnabled()); QCOMPARE(state.starts, 0u);
+        QCOMPARE(state.starts, 0u);
     }
     void setupRefreshKeepsSelectionAndPersistsChoice() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
@@ -153,36 +155,49 @@ private slots:
     }
     void receiveImageWhileSenderOperates() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state; CaptureState capture;
+        settings.setValue("receive/enabled", false); // Old pause preference must no longer disable reception.
         {
             MainWindow window(std::make_unique<FakeOutput>(state), settings, std::make_unique<FakeCapture>(capture)); window.show();
             QVERIFY(window.loadImage(picture(dir))); QTRY_VERIFY(capture.open); QCOMPARE(capture.chosen, std::string("fromQO100"));
             auto* send = window.findChild<QPushButton*>("transmitButton"); send->click(); QVERIFY(state.open); QVERIFY(capture.open);
             QImage image(400, 200, QImage::Format_RGB32); image.fill(QColor(20, 40, 230));
-            const auto prepared = preparePicture(image, QSize(640, 480)); ImageAudio signal(prepareImage(prepared.jpeg, "received.jpg"));
+            const auto prepared = preparePicture(image, QSize(640, 480)); ImageAudio signal(prepareImage(prepared.jpeg, "Rundfunkmuseum_Besichtigung_Cham_Radio_Sender.jpg"));
             std::array<float, 4800> buffer{};
             while (const auto count = signal.render(buffer.data(), buffer.size(), .6f)) {
-                QVERIFY(capture.open); capture.consume(buffer.data(), count); QTest::qWait(2);
+                QVERIFY(capture.open); capture.consume(buffer.data(), count);
+                std::array<float, 4800> txBuffer{}; state.render(txBuffer.data(), count); QTest::qWait(2);
             }
             QTRY_COMPARE_WITH_TIMEOUT(window.findChild<QProgressBar*>("receiveProgress")->value(), 100, 5000);
             QVERIFY(window.findChild<QAction*>("saveReceived")->isEnabled());
             QVERIFY(window.findChild<QLabel*>("receivedPreview")->text().isEmpty()); QVERIFY(state.open);
             if (qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT")) {
                 QVERIFY(window.grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT")));
-                window.resize(820, 780); QTest::qWait(30);
+                window.resize(640, 440); QTest::qWait(30);
                 QVERIFY(window.grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + ".small.png"));
             }
             send->click(); QVERIFY(!state.open); QVERIFY(capture.open);
-            window.findChild<QCheckBox*>("receiveEnabled")->setChecked(false); QVERIFY(!capture.open);
+            // Input changes keep the always-on receiver active without a checkbox.
+            QTimer::singleShot(30, &window, [&] {
+                auto* dialog = window.findChild<QDialog*>(); QVERIFY(dialog);
+                auto* inputs = dialog->findChild<QComboBox*>("inputDevice");
+                inputs->setCurrentIndex(inputs->findData("other-input")); dialog->reject();
+            });
+            window.findChild<QAction*>("audioSetup")->trigger();
+            QVERIFY(capture.open); QCOMPARE(capture.chosen, std::string("other-input"));
         }
         QVERIFY(!capture.open);
     }
-    void validTestFramesWithoutImage() {
-        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
-        MainWindow window(std::make_unique<FakeOutput>(state), settings);
-        window.findChild<QAction*>("validFrameTest")->trigger(); QVERIFY(state.open);
-        auto* button = window.findChild<QPushButton*>("transmitButton"); QCOMPARE(button->text(), QString("STOP"));
-        button->click(); QVERIFY(!state.open); QVERIFY(!button->isEnabled());
+    void receiveRetriesAfterInputFailure() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state; CaptureState capture;
+        capture.failStart = true;
+        MainWindow window(std::make_unique<FakeOutput>(state), settings, std::make_unique<FakeCapture>(capture));
+        QTRY_COMPARE(capture.starts, 1u); QVERIFY(!capture.open);
+        capture.failStart = false; QTRY_VERIFY_WITH_TIMEOUT(capture.open, 5000); QCOMPARE(capture.starts, 2u);
+        QVERIFY(window.loadImage(picture(dir))); window.findChild<QPushButton*>("transmitButton")->click(); QVERIFY(state.open);
+        capture.error = "Input disconnected"; QTRY_VERIFY(!capture.open); QVERIFY(state.open);
+        QTRY_VERIFY_WITH_TIMEOUT(capture.open, 5000); QCOMPARE(capture.starts, 3u); QVERIFY(state.open);
     }
+
 };
 QTEST_MAIN(UiTest)
 #include "test_ui.moc"

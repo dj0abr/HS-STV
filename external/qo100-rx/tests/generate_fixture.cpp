@@ -25,9 +25,9 @@ int main(int argc, char** argv) {
     schifra::make_sequential_root_generator_polynomial(field,120,32,generator);
     schifra::reed_solomon::encoder<255,32,223> encoder(field,generator);
     auto mod=modem_create(LIQUID_MODEM_APSK8);
-    float h[601];
-    liquid_firdes_prototype(LIQUID_FIRFILT_RRC,20,15,0.2f,-0.2f,h);
-    auto interp=firinterp_crcf_create(20,h,601);
+    float h[721];
+    liquid_firdes_prototype(LIQUID_FIRFILT_RRC,24,15,0.2f,-0.2f,h);
+    auto interp=firinterp_crcf_create(24,h,721);
     double phase=0, pilot_phase=0;
     uint64_t audio_samples = 0;
     for(int frame=0;frame<frame_count;++frame) {
@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
             acc=(acc<<8)|byte;bits+=8;
             while(bits>=3) {
                 bits-=3;unsigned int sym=(acc>>bits)&7;
-                liquid_float_complex x,y[20];modem_modulate(mod,sym,&x);
+                liquid_float_complex x,y[24];modem_modulate(mod,sym,&x);
                 firinterp_crcf_execute(interp,x,y);
                 for(auto c:y) {
                     double t = audio_samples++/48000.0;

@@ -4,7 +4,6 @@
 #include "receive_monitor.hpp"
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QCheckBox>
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QImageReader>
@@ -15,6 +14,13 @@
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QGridLayout>
+#include <QGuiApplication>
+#include <QHelpEvent>
+#include <QPainter>
+#include <QScreen>
+#include <QStyle>
+#include <QToolTip>
 #include <QLabel>
 #include <QMenuBar>
 #include <QPushButton>
@@ -25,9 +31,37 @@
 #include <algorithm>
 
 namespace mm_sstv {
+namespace {
+// File names and live status must never force the two image columns wider.
+// Keep the full QLabel text for accessibility and show it in the tooltip.
+class CompactLabel final : public QLabel {
+public:
+    explicit CompactLabel(QWidget* parent, Qt::TextElideMode mode = Qt::ElideMiddle)
+        : QLabel(parent), mode_(mode) {
+        setTextFormat(Qt::PlainText); setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    }
+    QSize minimumSizeHint() const override { return {0, fontMetrics().height() + 2}; }
+    QSize sizeHint() const override { return {std::min(240, QLabel::sizeHint().width()), fontMetrics().height() + 2}; }
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter painter(this);
+        style()->drawItemText(&painter, contentsRect(), alignment(), palette(), isEnabled(),
+            fontMetrics().elidedText(text(), mode_, contentsRect().width()), foregroundRole());
+    }
+    bool event(QEvent* event) override {
+        if (event->type() == QEvent::ToolTip) {
+            QToolTip::showText(static_cast<QHelpEvent*>(event)->globalPos(), toolTip().isEmpty() ? text() : toolTip(), this); return true;
+        }
+        return QLabel::event(event);
+    }
+private:
+    Qt::TextElideMode mode_;
+};
+}
 MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings, std::unique_ptr<AudioInput> input)
     : transmitter_(std::move(output)), settings_(settings), receiver_(std::move(input)) {
-    setWindowTitle("mm-sstv · Bilder senden und empfangen"); setMinimumSize(820, 780); resize(1120, 900);
+    setWindowTitle("mm-sstv · Bilder senden und empfangen"); setMinimumSize(640, 440);
     inputDevice_ = settings_.value("audio/input", "fromQO100").toString().toStdString();
     device_ = settings_.value("audio/output", "toQO100").toString().toStdString();
     level_ = std::clamp(settings_.value("audio/level", 35).toInt(), 0, 100);
@@ -40,73 +74,79 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     auto* menu = menuBar()->addMenu("Setup");
     auto* audio = menu->addAction("Audioausgang und Pegel…"); audio->setObjectName("audioSetup");
     connect(audio, &QAction::triggered, this, [this] { setup(); });
-    auto* tests = menuBar()->addMenu("Test");
-    berTest_ = tests->addAction("Gültige HS-Modem-Testframes senden"); berTest_->setObjectName("validFrameTest");
-    randomTest_ = tests->addAction("Zufallsdaten senden"); randomTest_->setObjectName("randomTest");
-    connect(berTest_, &QAction::triggered, this, [this] { startTest(true); });
-    connect(randomTest_, &QAction::triggered, this, [this] { startTest(false); });
     auto* central = new QWidget(this); auto* layout = new QVBoxLayout(central);
-    layout->setContentsMargins(20, 16, 20, 16); layout->setSpacing(10);
-    auto* description = new QLabel(QString("8APSK · %1 bit/s · Referenzträger %2 Hz")
-        .arg(TxModulator::bitRate).arg(TxModulator::pilotHz), central);
-    description->setObjectName("modulationInfo");
-    description->setAlignment(Qt::AlignCenter); layout->addWidget(description);
-    preview_ = new ImagePanel(central); preview_->setObjectName("imagePreview");
-    preview_->clicked = [this] { chooseImage(); };
-    preview_->dropped = [this](const QString& path) { loadImage(path); };
-    auto* panes = new QHBoxLayout; auto* sendPane = new QVBoxLayout; auto* receivePane = new QVBoxLayout;
-    sendPane->addWidget(new QLabel("Zu senden", central)); sendPane->addWidget(preview_, 1);
-    receiveCheck_ = new QCheckBox("Empfang", central); receiveCheck_->setObjectName("receiveEnabled");
-    receiveCheck_->setChecked(settings_.value("receive/enabled", true).toBool() && receiver_.available());
-    receiveCheck_->setEnabled(receiver_.available()); receivePane->addWidget(receiveCheck_);
-    receivePreview_ = new ImagePanel(central, false); receivePreview_->setObjectName("receivedPreview"); receivePane->addWidget(receivePreview_, 1);
-    receiveStatus_ = new QLabel("Empfang aus", central); receiveStatus_->setWordWrap(true); receiveStatus_->setObjectName("receiveStatus");
-    receiveInfo_ = new QLabel(central); receiveInfo_->setWordWrap(true); receiveInfo_->setObjectName("receiveInfo");
-    receiveProgress_ = new QProgressBar(central); receiveProgress_->setValue(0); receiveProgress_->setObjectName("receiveProgress");
-    panes->addLayout(sendPane, 1); panes->addLayout(receivePane, 1); layout->addLayout(panes, 1);
-    auto* metadata = new QHBoxLayout; auto* sendMeta = new QVBoxLayout; auto* receiveMeta = new QVBoxLayout;
-    auto* formatRow = new QHBoxLayout; formatRow->addWidget(new QLabel("Bildgröße", central));
-    sizes_ = new QComboBox(central); sizes_->setObjectName("imageSize");
+    layout->setContentsMargins(6, 6, 6, 6); layout->setSpacing(6);
+    auto* panes = new QGridLayout; panes->setHorizontalSpacing(6); panes->setVerticalSpacing(4);
+    panes->setColumnStretch(0, 1); panes->setColumnStretch(1, 1); panes->setRowStretch(1, 1);
+    auto* sendHeader = new QHBoxLayout; sendHeader->setSpacing(4);
+    auto* title = new QLabel("Sendebild", central); auto titleFont = title->font(); titleFont.setBold(true); title->setFont(titleFont);
+    sendHeader->addWidget(title);
+    sizes_ = new QComboBox(central); sizes_->setObjectName("imageSize"); sizes_->setToolTip("Bildgröße der übertragenen JPEG-Datei; die Vorschau passt sich dem Fenster an.");
     for (const auto size : {QSize(320, 240), QSize(640, 480), QSize(800, 600), QSize(1024, 768)})
         sizes_->addItem(QString("%1 × %2").arg(size.width()).arg(size.height()), size);
     sizes_->setCurrentIndex(std::clamp(settings_.value("image/sizeIndex", 1).toInt(), 0, 3));
-    formatRow->addWidget(sizes_); formatRow->addStretch(); sendMeta->addLayout(formatRow);
+    sendHeader->addWidget(sizes_);
     connect(sizes_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
         settings_.setValue("image/sizeIndex", index); prepare();
     });
-    imageInfo_ = new QLabel(central); imageInfo_->setObjectName("imageInfo"); imageInfo_->setWordWrap(true); sendMeta->addWidget(imageInfo_);
-    receiveMeta->addWidget(receiveStatus_); receiveMeta->addWidget(receiveInfo_); receiveMeta->addWidget(receiveProgress_);
-    metadata->addLayout(sendMeta, 1); metadata->addLayout(receiveMeta, 1); layout->addLayout(metadata);
+    start_ = new QPushButton("Senden", central); start_->setObjectName("transmitButton"); start_->setMinimumWidth(80);
+    auto buttonFont = start_->font(); buttonFont.setBold(true); start_->setFont(buttonFont); sendHeader->addWidget(start_); sendHeader->addStretch();
+    panes->addLayout(sendHeader, 0, 0);
+    auto* receiveHeader = new QHBoxLayout; receiveHeader->setSpacing(6);
+    auto* receiveTitle = new QLabel("Empfang", central); receiveTitle->setFont(titleFont); receiveHeader->addWidget(receiveTitle);
+    receiveStatus_ = new CompactLabel(central, Qt::ElideRight); receiveStatus_->setText(receiver_.available() ? "Empfang startet…" : "Kein Audioeingang"); receiveStatus_->setObjectName("receiveStatus");
+    receiveHeader->addWidget(receiveStatus_, 1); panes->addLayout(receiveHeader, 0, 1);
+    preview_ = new ImagePanel(central); preview_->setObjectName("imagePreview");
+    preview_->clicked = [this] { chooseImage(); };
+    preview_->dropped = [this](const QString& path) { loadImage(path); };
+    receivePreview_ = new ImagePanel(central, false); receivePreview_->setObjectName("receivedPreview");
+    panes->addWidget(preview_, 1, 0); panes->addWidget(receivePreview_, 1, 1);
+    imageInfo_ = new CompactLabel(central); imageInfo_->setObjectName("imageInfo"); panes->addWidget(imageInfo_, 2, 0);
+    receiveInfo_ = new CompactLabel(central); receiveInfo_->setObjectName("receiveInfo"); panes->addWidget(receiveInfo_, 2, 1);
+    progress_ = new QProgressBar(central); progress_->setObjectName("sendProgress"); progress_->setValue(0); progress_->setFormat("TX %p%");
+    receiveProgress_ = new QProgressBar(central); receiveProgress_->setObjectName("receiveProgress"); receiveProgress_->setValue(0); receiveProgress_->setFormat("RX %p%");
+    const auto styleProgress = [](QProgressBar* bar, const QString& color) {
+        auto font = bar->font(); font.setPointSizeF(8); bar->setFont(font);
+        bar->setFixedHeight(std::max(14, bar->fontMetrics().height() + 2));
+        bar->setStyleSheet(QString("QProgressBar { border: 1px solid #b6c0c8; border-radius: 3px; background: #eef1f4; color: #172331; text-align: center; padding: 0px; } QProgressBar::chunk { background: %1; border-radius: 2px; }").arg(color));
+    };
+    styleProgress(progress_, "#e76969"); styleProgress(receiveProgress_, "#5ab875");
+    panes->addWidget(progress_, 3, 0); panes->addWidget(receiveProgress_, 3, 1);
+    layout->addLayout(panes, 1);
     monitor_ = new ReceiveMonitor(central); layout->addWidget(monitor_);
-    progress_ = new QProgressBar(central); progress_->setObjectName("sendProgress"); progress_->setValue(0); layout->addWidget(progress_);
-    start_ = new QPushButton("Senden", central); start_->setObjectName("transmitButton");
-    start_->setMinimumSize(220, 54);
-    auto font = start_->font(); font.setPointSize(20); font.setBold(true); start_->setFont(font);
-    layout->addWidget(start_, 0, Qt::AlignHCenter);
-    status_ = new QLabel(central); status_->setObjectName("statusText");
-    status_->setWordWrap(true); status_->setAlignment(Qt::AlignCenter);
-    status_->setTextInteractionFlags(Qt::TextSelectableByMouse); layout->addWidget(status_);
+    auto* footer = new QHBoxLayout; footer->setSpacing(8);
+    status_ = new CompactLabel(central, Qt::ElideRight); status_->setObjectName("statusText"); footer->addWidget(status_, 1);
+    auto* description = new QLabel(QString("8APSK · %1 bit/s").arg(TxModulator::bitRate), central);
+    description->setToolTip(QString("Sendereferenzträger %1 Hz").arg(TxModulator::pilotHz));
+    description->setObjectName("modulationInfo"); footer->addWidget(description); layout->addLayout(footer);
     setCentralWidget(central);
+    QSize initialSize(900, 560);
+    if (const auto* screen = QGuiApplication::primaryScreen()) initialSize = initialSize.boundedTo(screen->availableGeometry().size() - QSize(24, 48));
+    resize(initialSize.expandedTo(minimumSize()));
     connect(start_, &QPushButton::clicked, this, [this] { toggle(); });
     auto* timer = new QTimer(this); timer->setInterval(100);
     connect(timer, &QTimer::timeout, this, [this] { poll(); }); timer->start();
+    receiveRetry_ = new QTimer(this); receiveRetry_->setSingleShot(true); receiveRetry_->setInterval(3000);
+    connect(receiveRetry_, &QTimer::timeout, this, [this] { restartReceiver(); });
+    settings_.remove("receive/enabled"); // Migrate the obsolete manual-pause preference.
     receiver_.imageReceived = [this](const ReceivedImage& image) { receivedImage(image); };
     receiver_.statusChanged = [this](const ReceiveStatus& status) {
         monitor_->setStatus(status);
-        QString text = status.state;
-        if (status.pilot >= 0) text += QString(" · Pilot %1 Hz").arg(status.pilot, 0, 'f', 1);
-        if (status.frames) text += QString("\nAFC %1 Hz · %2 gültige Frames").arg(status.offset, 0, 'f', 1).arg(qulonglong(status.frames));
-        receiveStatus_->setText(text);
+        QString details = status.state;
+        if (status.pilot >= 0) details += QString(" · Pilot %1 Hz").arg(status.pilot, 0, 'f', 1);
+        if (status.frames) details += QString(" · AFC %1 Hz · %2 gültige Frames").arg(status.offset, 0, 'f', 1).arg(qulonglong(status.frames));
+        QString text = status.locked ? "Sync" : status.state;
+        if (status.frames) text += QString(" · AFC %1 Hz").arg(status.offset, 0, 'f', 1);
+        receiveStatus_->setText(text); receiveStatus_->setToolTip(details);
     };
     receiver_.failed = [this](const QString& text) {
-        monitor_->clear("Empfang unterbrochen");
-        receiveStatus_->setText(text); const QSignalBlocker blocker(receiveCheck_); receiveCheck_->setChecked(false);
+        monitor_->clear("Empfang unterbrochen"); receiveStatus_->setToolTip({});
+        receiveStatus_->setText(text); receiveRetry_->start();
     };
-    connect(receiveCheck_, &QCheckBox::toggled, this, [this](bool enabled) { settings_.setValue("receive/enabled", enabled); restartReceiver(); });
     refreshDevices();
     if (receiver_.available()) QTimer::singleShot(0, this, [this] { restartReceiver(); });
 }
-MainWindow::~MainWindow() { transmitter_.stop(); receiver_.stop(); }
+MainWindow::~MainWindow() { receiveRetry_->stop(); transmitter_.stop(); receiver_.stop(); }
 bool MainWindow::deviceAvailable() const {
     return std::any_of(devices_.begin(), devices_.end(), [this](const auto& d) { return d.id == device_; });
 }
@@ -115,7 +155,6 @@ void MainWindow::updateButton() {
     start_->setText(running ? "STOP" : "Senden");
     start_->setEnabled(running || (deviceAvailable() && image_.has_value()));
     sizes_->setEnabled(!running); preview_->setEditable(!running); open_->setEnabled(!running);
-    berTest_->setEnabled(!running && deviceAvailable()); randomTest_->setEnabled(!running && deviceAvailable());
 }
 void MainWindow::showReady() {
     if (deviceAvailable()) status_->setText("Bereit · " + QString::fromStdString(device_) + " · " + QString::number(level_) + " %");
@@ -148,12 +187,6 @@ void MainWindow::poll() {
     }
     if (transmitter_.running()) progress_->setValue(transmitter_.progress());
 }
-void MainWindow::startTest(bool validFrames) {
-    try {
-        transmitter_.startTest(device_, validFrames); updateButton(); progress_->setValue(0);
-        status_->setText(validFrames ? "Sendet gültige HS-Modem-Testframes" : "Sendet Zufallsdaten");
-    } catch (const std::exception& e) { updateButton(); status_->setText(QString::fromUtf8(e.what())); }
-}
 void MainWindow::chooseImage() {
     const auto path = QFileDialog::getOpenFileName(this, "Bild öffnen", settings_.value("image/directory").toString(),
         "Bilder (*.jpg *.jpeg *.png *.bmp *.gif *.webp);;Alle Dateien (*)");
@@ -178,18 +211,19 @@ void MainWindow::prepare() {
         const auto picture = preparePicture(original_, sizes_->currentData().toSize());
         image_ = prepareImage(picture.jpeg, filename_.toUtf8().toStdString()); preview_->setImage(picture.preview);
         const auto seconds = (image_->audioFrames() + TxModulator::sampleRate - 1) / TxModulator::sampleRate;
-        imageInfo_->setText(QString("%1 · %2 × %3 · JPEG %4 kB · ca. %5 s")
+        imageInfo_->setText(QString("%1 · %2 × %3 · %4 kB · %5 s")
             .arg(QString::fromStdString(image_->filename)).arg(picture.preview.width()).arg(picture.preview.height())
             .arg(image_->jpegBytes / 1000., 0, 'f', 1).arg(seconds));
         showReady();
     } catch (const std::exception& e) { imageInfo_->clear(); status_->setText(QString::fromUtf8(e.what())); updateButton(); }
 }
 void MainWindow::restartReceiver() {
-    monitor_->clear();
-    if (!receiveCheck_->isChecked()) { receiver_.stop(); receiveStatus_->setText("Empfang aus"); return; }
+    monitor_->clear(); receiveStatus_->setToolTip({});
+    receiveRetry_->stop();
+    if (!receiver_.available()) { receiveStatus_->setText("Kein Audioeingang"); return; }
     try { receiver_.start(inputDevice_); }
     catch (const std::exception& e) {
-        receiveStatus_->setText(QString::fromUtf8(e.what())); const QSignalBlocker blocker(receiveCheck_); receiveCheck_->setChecked(false);
+        receiveStatus_->setText(QString::fromUtf8(e.what())); receiveRetry_->start();
     }
 }
 void MainWindow::receivedImage(const ReceivedImage& image) {
@@ -230,7 +264,7 @@ void MainWindow::setup() {
                 if (device.name != device.id) name += " [" + QString::fromStdString(device.id) + "]";
                 inputs->addItem(name, QString::fromStdString(device.id));
             }
-        } catch (const std::exception& e) { receiveStatus_->setText(QString::fromUtf8(e.what())); }
+        } catch (const std::exception& e) { receiveStatus_->setToolTip({}); receiveStatus_->setText(QString::fromUtf8(e.what())); }
         int selected = inputs->findData(QString::fromStdString(inputDevice_));
         if (selected < 0) { inputs->insertItem(0, QString::fromStdString(inputDevice_) + " (nicht verfügbar)", QString::fromStdString(inputDevice_)); selected = 0; }
         inputs->setCurrentIndex(selected); inputs->setEnabled(receiver_.available());
@@ -274,7 +308,7 @@ void MainWindow::setup() {
     connect(inputs, QOverload<int>::of(&QComboBox::currentIndexChanged), &dialog, [&](int index) {
         if (index < 0) return;
         inputDevice_ = inputs->itemData(index).toString().toStdString(); settings_.setValue("audio/input", QString::fromStdString(inputDevice_));
-        if (receiveCheck_->isChecked()) restartReceiver();
+        restartReceiver();
     });
     connect(slider, &QSlider::valueChanged, &dialog, [&](int value) {
         level_ = static_cast<unsigned>(value); transmitter_.setLevel(level_);

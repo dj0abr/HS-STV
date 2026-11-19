@@ -12,7 +12,7 @@ Receiver::Receiver(std::unique_ptr<AudioInput> input, QObject* parent) : QObject
     connect(&core_, &QProcess::readyReadStandardOutput, this, [this] { readOutput(); });
     connect(&core_, &QProcess::readyReadStandardError, this, [this] { core_.readAllStandardError(); });
     connect(&core_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [this](int, QProcess::ExitStatus) {
-        if (active_) fail("Empfangskern wurde beendet. Empfang bitte neu starten.");
+        if (active_) fail("Empfangskern wurde beendet.");
     });
     connect(&timer_, &QTimer::timeout, this, [this] { pump(); }); timer_.setInterval(10);
 }
@@ -61,7 +61,7 @@ void Receiver::pump() {
         std::lock_guard<std::mutex> lock(mutex_); overflow = overflow_;
         blocks.swap(queued_); queuedSamples_ = 0;
     }
-    if (overflow || core_.bytesToWrite() > 192000) { fail("Empfangspuffer übergelaufen. Empfang bitte neu starten."); return; }
+    if (overflow || core_.bytesToWrite() > 192000) { fail("Empfangspuffer übergelaufen."); return; }
     for (const auto& block : blocks) {
         const auto bytes = qint64(block.size() * sizeof(float));
         if (core_.write(reinterpret_cast<const char*>(block.data()), bytes) != bytes) { fail("Audio konnte nicht an den Empfangskern übergeben werden."); return; }

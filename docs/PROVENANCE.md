@@ -18,7 +18,7 @@ und der Pilotfaktor erhalten. Ein neues Sendesignal wird am Anfang innerhalb
 von 5 ms eingeblendet; Pegeländerungen werden ebenfalls geglättet.
 Die ursprüngliche feste Ausgangsskalierung 0,1 wurde durch eine aus RRC-Taps,
 Konstellation, Audio-Projektion und Pilotamplitude bestimmte Vollaussteuerungs-
-normalisierung ersetzt (Faktor ungefähr 0,317353). Das erhöht Daten und Pilot
+normalisierung ersetzt (Faktor ungefähr 0,317397 im aktuellen 6000-bit/s-Modus). Das erhöht Daten und Pilot
 linear um denselben Faktor und lässt die übrige Wellenform unverändert.
 
 Der Modus wurde anschließend auf Benutzerwunsch auf 7200 bit/s umgestellt.
@@ -90,3 +90,20 @@ Die native Qt-Monitoranzeige und `AudioSpectrum` sind neue mm-sstv-Bausteine.
 Sie nutzen die ohnehin enthaltene liquid-dsp-FFT; die Monitoroption verändert
 keine Samples, Pilotentscheidung oder Decoderparameter. Die Konstellationsdaten
 kommen unverändert aus der bestehenden `points`-Ausgabe von QO100_TRX2.
+
+## Rückkehr zu 6000 bit/s und dauerhafter Empfang
+
+Auf Benutzerwunsch wieder **6000 bit/s**, damit das Signal durch schmalere
+Funkgerätefilter passt. Referenz ist der ursprüngliche HS-Modem-Moduseintrag
+`{48000, 24, 6, 3, 6000, 4800}` in `hsmodem.cpp`: 24 TX-Samples pro Symbol,
+RX-Vordezimation 6 und vier Samples pro Symbol im Tracker. Die interne PLL
+läuft mit zwei Samples pro Symbol, daher beträgt ihre Umrechnung 4000 Hz.
+Pilotsuche, AFC-Entscheidungen, Symboltracker, FEC und Frame-CRC bleiben erhalten.
+Der Testgenerator ist entsprechend auf 24 Samples pro Symbol angepasst.
+Die aktuellen Tests verwenden diese 6000-bit/s-Parameter. Ältere 7200-bit/s-
+Prüfberichte und das Beacon-Manifest dokumentieren den historischen Projektstand.
+
+Die GUI bietet keine Testaussendungen und keinen Empfangsschalter mehr.
+Der Empfang ist dauerhaft aktiviert, mit Wiederverbindung nach Gerätefehlern.
+Das Testsender-API für automatisierte Audiotests und die Offline-WAV-Werkzeuge
+bleiben intern bzw. separat verfügbar.

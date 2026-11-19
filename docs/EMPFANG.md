@@ -13,6 +13,11 @@ Enthalten sind Pilotsuche/AFC (`pilot_afc.*` und Empfangsschleife aus `rx_probe.
 Downmixer, Vorfilter, Symboltracking, Header-/Rotationssuche, Descrambler,
 Reed-Solomon und Frame-CRC. Originalhinweise und die Schifra-Header bleiben erhalten.
 
+Aktueller Modus: **8APSK 6000 bit/s**, 2000 Symbole/s. Der Vorfilter dezimiert
+48 kHz um Faktor 6 auf 8 kHz; Symboltracking mit vier Samples pro Symbol und
+PLL-Nachführung mit 4000 Samples/s entsprechen dem originalen HS-Modem-Modus.
+Die gemeinsamen Parameter stehen in `include/mm_sstv/modem_mode.hpp`.
+
 Die Such- und Nachführregeln bleiben unverändert: 20–900 Hz Pilotsuche mit
 überlappenden FFTs, stabile Kandidaten, Verwerfen unbestätigter Töne,
 Bestätigung durch gültige Frames, kontinuierliche Übernahme langsamer PLL-
@@ -27,7 +32,7 @@ keinen Netzwerkserver. Der Build braucht kein bestehendes Nachbarprojekt.
 
 Die Anpassungen an der übernommenen Empfangsschleife betreffen den Windows-
 Binärmodus von stdin, das zusätzliche Anzeige-Feld `pilot_hz` und die optionale
-Monitor-FFT (siehe unten). Die Pilotenanzeige
+Monitor-FFT (siehe unten) sowie die Modusparameter für 6000 bit/s. Die Pilotenanzeige
 folgt bei bestätigter Synchronisation dem Empfangskanal statt einem stärkeren
 fremden Ton. Die eigentliche Akquisition und AFC wurden nicht ersetzt.
 
@@ -38,7 +43,8 @@ Vollaussteuerungsnormierung bleiben unverändert.
 
 ## Live-Spektrum und Konstellation
 
-Unter den Bildern liegen ein natives Qt-Spektrum und das 8APSK-Konstellationsdiagramm.
+Unter den Bildern liegen ein natives Qt-Spektrum und das 8APSK-Konstellationsdiagramm
+in einer standardmäßig 120 Pixel hohen Leiste.
 Die Prozessbrücke aktiviert dafür `mm-sstv-rx-core --monitor`. Ohne diese Option
 bleibt die bisherige Statusausgabe unverändert. Bereits vorhandene `points` werden
 jetzt als reale, entzerrte I/Q-Symbole dargestellt; bis zu 600 Punkte bilden eine
@@ -57,11 +63,11 @@ der RMS-Pegel des Eingangs. Die FFT erhält keine automatische Pegelnormierung.
 
 Der Bereich 20–900 Hz markiert die Pilotsuche. Die grüne Linie folgt dem vom
 Decoder gewählten Piloten, die gelben Linien markieren die aktuelle Datenmitte
-±1440 Hz (2400 Symbole/s, RRC-Rolloff 0,2). Beim Verkleinern bleiben schmale
+±1200 Hz (2000 Symbole/s, RRC-Rolloff 0,2). Beim Verkleinern bleiben schmale
 Träger durch das Maximum der FFT-Bins pro Pixel sichtbar. Die feste I/Q-Skalierung
 verhindert eine scheinbar saubere Konstellation durch automatische Größenanpassung.
 
-Pause, Eingangswechsel und Empfangsfehler leeren die Anzeige. Digitale Stille
+Eingangswechsel und Empfangsfehler leeren die Anzeige. Digitale Stille
 ersetzt nach Ablauf des FFT-Fensters das alte Spektrum; die Punktspur wird beim
 ausbleibenden Symbolstrom geleert. Bei fehlenden aktuellen Statusdaten wird nach
 zwei Sekunden auch die Anzeige als veraltet verworfen. Bildblöcke bleiben erhalten.
@@ -97,13 +103,20 @@ werden. Die originale JPEG-Datei wird mit QSaveFile atomar abgelegt.
 
 ## Bedienung
 
-- Links: zu sendendes Bild. Rechts: Empfangsbild, Pilot-/Sync-Anzeige, gültige
-  Frames und Bildblock-Fortschritt.
+- Links: zu sendendes Bild mit Formatwahl und Senden/STOP in der Kopfzeile;
+  Bilddaten und TX-Fortschritt direkt darunter. Rechts: Empfangsbild,
+  Sync-/AFC-Anzeige und RX-Fortschritt. Die flachen Balken sind für TX rot und RX grün. Den vollständigen Empfangsstatus
+  mit Pilot und Anzahl gültiger Frames zeigt der Tooltip der Statusanzeige.
+- Startgröße höchstens 900 × 560 Pixel, an den Bildschirm angepasst;
+  Mindestfenster 640 × 440 Pixel. Beide Vorschauen werden proportional verkleinert,
+  ohne das gewählte Sendeformat zu verändern. Lange Namen und Meldungen erscheinen
+  abgekürzt; der Tooltip enthält den vollständigen Text.
 - Audioeingang standardmäßig `fromQO100`, Audioausgang weiterhin `toQO100`.
   Beide sind im Setup auswählbar; es gibt keinen stillen Wechsel auf ein anderes Gerät.
-- Empfang startet beim Programmstart automatisch, wenn aktiviert und der Eingang
-  verfügbar ist. Das Kästchen „Empfang“ hält ausschließlich den Empfang an bzw.
-  startet ihn neu. Gespeicherte Geräteeinstellungen werden wiederverwendet.
+- Empfang ist immer aktiviert und startet beim Programmstart automatisch. Alte
+  Einstellungen für eine manuelle Empfangspause werden entfernt. Falls der gewählte
+  Eingang fehlt oder ausfällt, versucht die GUI alle drei Sekunden erneut zu
+  verbinden. Gespeicherte Geräteeinstellungen werden wiederverwendet.
 - RX und TX laufen unabhängig. STOP beendet ausschließlich die Sendung. Die Wahl
   eines neuen Eingangs unterbricht nicht die Sendung.
 - Beim virtuellen Audioweg `fromQO100` liefert QO100_TRX2 den RX2-Kanal. Dessen
@@ -116,10 +129,14 @@ werden. Die originale JPEG-Datei wird mit QSaveFile atomar abgelegt.
 Die elf eigenständigen CTest-Gruppen enthalten zusätzlich zu den bisherigen
 Sendetests:
 
-- Alle 16 übernommenen QO100_RX-Regressionstests: Frequenzversatz bis +750 Hz,
+- Alle 16 übernommenen QO100_RX-Regressionstests, mit 6000-bit/s-Fixtures:
+  Frequenzversatz bis +750 Hz,
   negative Versätze, 500-Hz-Pilot, Drift, Frequenzsprünge, Signalverlust, erneute
   Akquisition, stärkerer fremder Ton sowie keine falsche Daten-Synchronisation
   durch Rauschen, Stille, reine Träger oder CRC-fehlerhafte Frames.
+- Separat aus den originalen QO100_TRX2-Quellen gebauter Referenzempfänger,
+  auf 6000 bit/s parametriert: Bild mit 26047 Bytes ohne Versatz und bei +81 Hz
+  AFC byteidentisch rekonstruiert. Die Nachbarprojekte wurden nicht verändert.
 - Eigener vollständiger RX-Kern gegen den Bild-WAV-Generator: gültige Frames und
   byteidentisches JPEG ohne Versatz und mit automatisch korrigierten +81 Hz.
 - Qt-Prozessbrücke mit simuliertem Eingang: Synchronisation, 300 erfolgreich
@@ -131,8 +148,9 @@ Sendetests:
   erneuter Aussendung, Wechsel zwischen Bildern, alte Einzelframe-Zähler und
   beliebige Datei-IDs, ungültige Größen und kopflose Daten.
 - GUI: vollständiges Empfangsbild während gleichzeitig laufender Sendung,
-  Speicheraktion erst bei vollständigem Bild, STOP lässt RX aktiv, RX-Pause
-  beendet die Aufnahme. Zusätzlich bleiben die früheren Bedienprüfungen grün.
+  Speicheraktion erst bei vollständigem Bild, STOP lässt RX aktiv, Eingangswechsel
+  startet die Aufnahme sofort neu. Automatische Wiederverbindung nach fehlendem
+  Eingang und Eingangsfehler auch während TX. Die früheren Bedienprüfungen bleiben grün.
 - Privater PulseAudio-Server: echter Eingangsadapter mit expliziter Quellwahl,
   48-kHz-Float-Samples, gleichzeitige Wiedergabe/Aufnahme, keine automatische
   Ersatzquelle sowie Abbruch bei Entfernen des gewählten Eingangs.

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "receive_monitor.hpp"
+#include "mm_sstv/modem_mode.hpp"
 #include <QFontDatabase>
 #include <QPainter>
 #include <QPolygonF>
@@ -11,7 +12,7 @@ const QColor background("#09141c"), grid("#243b48"), label("#97b0bf"), trace("#6
 constexpr double maxHz = 4000, minDb = -140;
 }
 ReceiveMonitor::ReceiveMonitor(QWidget* parent) : QWidget(parent) {
-    setObjectName("receiveMonitor"); setMinimumSize(640, 160);
+    setObjectName("receiveMonitor"); setMinimumSize(300, 96); setMaximumHeight(144);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     setToolTip("Empfangsaudio vor AFC und AGC · 0–4000 Hz\nGrün: erkannter Pilot · Fläche: Pilotsuche 20–900 Hz\nGelb: Datenband der aktuellen Empfangsmitte\n8APSK: tatsächlich empfangene I/Q-Symbole nach dem Symboltracking");
     clear();
@@ -29,9 +30,9 @@ void ReceiveMonitor::setStatus(const ReceiveStatus& status) {
 void ReceiveMonitor::paintEvent(QPaintEvent*) {
     QPainter p(this); p.fillRect(rect(), background);
     auto font = QFontDatabase::systemFont(QFontDatabase::FixedFont); font.setPointSize(8); p.setFont(font);
-    const double constellationWidth = std::clamp(height() * 1.05, 160.0, width() * .27);
-    const QRectF spectrum(40, 30, width() - constellationWidth - 58, height() - 54);
-    const QRectF constellation(width() - constellationWidth, 30, constellationWidth - 12, height() - 42);
+    const double constellationWidth = std::min({height() + 6.0, 160.0, width() * .28});
+    const QRectF spectrum(34, 24, width() - constellationWidth - 48, height() - 44);
+    const QRectF constellation(width() - constellationWidth, 22, constellationWidth - 8, height() - 28);
     const auto x = [&](double hz) { return spectrum.left() + hz / maxHz * spectrum.width(); };
     const auto y = [&](double db) { return spectrum.top() + std::clamp(db / minDb, 0.0, 1.0) * spectrum.height(); };
     p.setPen(label); p.drawText(QRectF(8, 4, spectrum.right() - 8, 20), Qt::AlignLeft | Qt::AlignVCenter, "Empfangsaudio · dBFS/Bin");
@@ -39,9 +40,9 @@ void ReceiveMonitor::paintEvent(QPaintEvent*) {
         p.drawText(QRectF(8, 4, spectrum.right() - 8, 20), Qt::AlignRight | Qt::AlignVCenter, QString("%1 dBFS").arg(status_.level, 0, 'f', 1));
     p.drawText(QRectF(constellation.left() + 4, 4, constellation.width(), 20), Qt::AlignLeft | Qt::AlignVCenter, "8APSK");
     p.fillRect(QRectF(x(20), spectrum.top(), x(900) - x(20), spectrum.height()), QColor(20, 49, 49));
-    for (int db = 0; db >= -120; db -= 40) {
+    for (int db = 0, step = spectrum.height() < 70 ? 60 : 40; db >= -120; db -= step) {
         p.setPen(grid); p.drawLine(QPointF(spectrum.left(), y(db)), QPointF(spectrum.right(), y(db)));
-        p.setPen(label); p.drawText(QRectF(0, y(db) - 8, 33, 16), Qt::AlignRight | Qt::AlignVCenter, QString::number(db));
+        p.setPen(label); p.drawText(QRectF(0, y(db) - 8, 28, 16), Qt::AlignRight | Qt::AlignVCenter, QString::number(db));
     }
     for (int hz = 0; hz <= 4000; hz += 1000) {
         p.setPen(grid); p.drawLine(QPointF(x(hz), spectrum.top()), QPointF(x(hz), spectrum.bottom()));
@@ -64,7 +65,7 @@ void ReceiveMonitor::paintEvent(QPaintEvent*) {
         }
         append(); p.setPen(QPen(trace, 1)); p.drawPolyline(line);
         p.setPen(QPen(band, 1, Qt::DashLine));
-        for (const auto edge : {status_.center - 1440, status_.center + 1440})
+        for (const auto edge : {status_.center - ModemMode::halfBandwidthHz, status_.center + ModemMode::halfBandwidthHz})
             p.drawLine(QPointF(x(edge), spectrum.top()), QPointF(x(edge), spectrum.bottom()));
     }
     if (status_.pilot >= 0 && status_.pilot <= maxHz) {

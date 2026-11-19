@@ -19,14 +19,14 @@ std::vector<float> reference(std::size_t symbols, unsigned seed) {
     nco_crcf_set_frequency(carrier, 2.f * pi * 1500.f / 48000.f);
     nco_crcf_set_frequency(pilot, 2.f * pi * 100.f / 48000.f);
     float tau = -.2f; while (tau < 0) tau += 1;
-    float g = 20 * tau; int ds = static_cast<int>(std::floor(g)); float dt = g - ds;
+    float g = 24 * tau; int ds = static_cast<int>(std::floor(g)); float dt = g - ds;
     if (dt > .5f) { dt -= 1; ++ds; }
-    float h[601]; liquid_firdes_prototype(LIQUID_FIRFILT_RRC, 20, 15, .2f, dt, h);
-    auto filter = firinterp_crcf_create(20, h, 601);
+    float h[721]; liquid_firdes_prototype(LIQUID_FIRFILT_RRC, 24, 15, .2f, dt, h);
+    auto filter = firinterp_crcf_create(24, h, 721);
     std::mt19937 bits(seed);
-    std::vector<float> out; out.reserve(symbols * 20);
+    std::vector<float> out; out.reserve(symbols * 24);
     for (std::size_t i = 0; i < symbols; ++i) {
-        liquid_float_complex point{}, samples[20];
+        liquid_float_complex point{}, samples[24];
         modemcf_modulate(mod, bits() & 7u, &point); firinterp_crcf_execute(filter, point, samples);
         for (auto value : samples) {
             nco_crcf_step(carrier); liquid_float_complex c{}; nco_crcf_mix_up(carrier, value, &c);
@@ -41,8 +41,8 @@ std::vector<float> reference(std::size_t symbols, unsigned seed) {
 // checks worst-case pulse-shaping overshoot rather than trusting a random seed.
 std::vector<unsigned> peakSequence(std::size_t& target) {
     float tau = -.2f; while (tau < 0) tau += 1;
-    float dt = 20 * tau - std::floor(20 * tau); if (dt > .5f) dt -= 1;
-    float taps[601]; liquid_firdes_prototype(LIQUID_FIRFILT_RRC, 20, 15, .2f, dt, taps);
+    float dt = 24 * tau - std::floor(24 * tau); if (dt > .5f) dt -= 1;
+    float taps[721]; liquid_firdes_prototype(LIQUID_FIRFILT_RRC, 24, 15, .2f, dt, taps);
     auto modem = modemcf_create(LIQUID_MODEM_APSK8);
     auto carrier = nco_crcf_create(LIQUID_NCO), pilot = nco_crcf_create(LIQUID_NCO);
     constexpr float pi = 3.14159265358979323846f;
@@ -53,7 +53,7 @@ std::vector<unsigned> peakSequence(std::size_t& target) {
     double best = 0; std::vector<unsigned> sequence;
     for (std::size_t n = 0; n < 2880; ++n) {
         nco_crcf_step(carrier); nco_crcf_step(pilot);
-        if (n < 2400) continue;
+        if (n < 2000) continue;
         float projection[8];
         for (unsigned i = 0; i < 8; ++i) {
             liquid_float_complex mixed{}; nco_crcf_mix_up(carrier, points[i], &mixed);
@@ -61,14 +61,14 @@ std::vector<unsigned> peakSequence(std::size_t& target) {
         }
         for (const double direction : {-1., 1.}) {
             double amplitude = direction * .25 * nco_crcf_sin(pilot);
-            std::vector<unsigned> candidate(n / 20 + 1, 0);
-            for (std::size_t tap = n % 20; tap < 601; tap += 20) {
+            std::vector<unsigned> candidate(n / 24 + 1, 0);
+            for (std::size_t tap = n % 24; tap < 721; tap += 24) {
                 double maximum = -1e30; unsigned symbol = 0;
                 for (unsigned i = 0; i < 8; ++i) {
                     const double value = direction * taps[tap] * projection[i];
                     if (value > maximum) { maximum = value; symbol = i; }
                 }
-                candidate[n / 20 - tap / 20] = symbol; amplitude += maximum;
+                candidate[n / 24 - tap / 24] = symbol; amplitude += maximum;
             }
             if (amplitude > best) { best = amplitude; sequence = candidate; target = n; }
         }
@@ -79,15 +79,15 @@ std::vector<unsigned> peakSequence(std::size_t& target) {
 }
 int main() {
     try {
-        require(TxModulator::bitRate == 7200 && TxModulator::symbolRate == 2400 &&
-                TxModulator::samplesPerSymbol == 20, "Wrong HS-Modem 7200 mode");
+        require(TxModulator::bitRate == 6000 && TxModulator::symbolRate == 2000 &&
+                TxModulator::samplesPerSymbol == 24, "Wrong HS-Modem 6000 mode");
         struct CountingSource : SymbolSource {
             unsigned count = 0;
             unsigned next() override { return count++ & 7u; }
         } counting;
         TxModulator clockCheck; std::vector<float> oneSecond(48000);
         clockCheck.render(oneSecond.data(), oneSecond.size(), counting, 1);
-        require(counting.count == 2400, "Symbol clock is not 2400 symbols per second");
+        require(counting.count == 2000, "Symbol clock is not 2000 symbols per second");
         const auto expected = reference(5000, 123);
         TxModulator a, b; RandomSymbols sa(123), sb(123);
         std::vector<float> whole(expected.size()), chunks(expected.size());
@@ -103,7 +103,8 @@ int main() {
             energyReference += expected[i] * static_cast<double>(expected[i]);
         }
         const auto amplification = static_cast<float>(cross / energyReference);
-        require(amplification > 3.1734f && amplification < 3.1737f, "Unexpected full-scale calibration");
+        std::cout << "Measured 6000-mode gain " << amplification << "\n";
+        require(amplification > 3.1738f && amplification < 3.1741f, "Unexpected full-scale calibration");
         float maxError = 0, peak = 0;
         for (std::size_t i = 1000; i < whole.size(); ++i) {
             maxError = std::max(maxError, std::abs(whole[i] - expected[i] * amplification));

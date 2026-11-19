@@ -11,7 +11,7 @@ class QPushButton;
 class QComboBox;
 class QAction;
 class QProgressBar;
-class QCheckBox;
+class QTimer;
 namespace mm_sstv {
 class ImagePanel;
 class ReceiveMonitor;
@@ -24,7 +24,6 @@ private:
     void refreshDevices();
     void setup();
     void toggle();
-    void startTest(bool validFrames);
     void poll();
     void updateButton();
     void showReady();
@@ -46,7 +45,7 @@ private:
     QLabel* receiveStatus_ = nullptr;
     QLabel* receiveInfo_ = nullptr;
     QProgressBar* receiveProgress_ = nullptr;
-    QCheckBox* receiveCheck_ = nullptr;
+    QTimer* receiveRetry_ = nullptr;
     QAction* saveReceived_ = nullptr;
     std::vector<AudioDevice> devices_;
     std::string device_;
@@ -61,7 +60,5 @@ private:
     QLabel* imageInfo_ = nullptr;
     QProgressBar* progress_ = nullptr;
     QAction* open_ = nullptr;
-    QAction* berTest_ = nullptr;
-    QAction* randomTest_ = nullptr;
 };
 }

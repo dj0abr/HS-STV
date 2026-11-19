@@ -7,10 +7,10 @@
 #include <QUrl>
 namespace mm_sstv {
 ImagePanel::ImagePanel(QWidget* parent, bool interactive) : QLabel(parent), interactive_(interactive) {
-    setAcceptDrops(interactive); setAlignment(Qt::AlignCenter); setMinimumSize(320, 180);
+    setAcceptDrops(interactive); setAlignment(Qt::AlignCenter); setMinimumSize(160, 90);
     setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
-    setStyleSheet("QLabel { background: #e9edf0; border: 1px solid #aab4bc; border-radius: 6px; padding: 8px; }");
-    updateImage(); setEditable(true);
+    setStyleSheet("QLabel { background: #e9edf0; border: 1px solid #aab4bc; border-radius: 4px; padding: 0px; }");
+    setMargin(3); updateImage(); setEditable(true);
 }
 void ImagePanel::setEditable(bool editable) {
     editable_ = editable; setAcceptDrops(interactive_ && editable_);
@@ -19,7 +19,7 @@ void ImagePanel::setEditable(bool editable) {
 void ImagePanel::setImage(QImage image) { image_ = std::move(image); updateImage(); }
 void ImagePanel::updateImage() {
     if (image_.isNull()) { clear(); setText(interactive_ ? "Bild hier ablegen\noder zum Öffnen anklicken" : "Warte auf Bildempfang"); }
-    else setPixmap(QPixmap::fromImage(image_).scaled(contentsRect().size() - QSize(18, 18), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    else setPixmap(QPixmap::fromImage(image_).scaled(contentsRect().size() - QSize(6, 6), Qt::KeepAspectRatio, Qt::SmoothTransformation));
 }
 void ImagePanel::resizeEvent(QResizeEvent* event) { QLabel::resizeEvent(event); updateImage(); }
 void ImagePanel::mousePressEvent(QMouseEvent* event) {

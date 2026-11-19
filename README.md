@@ -1,9 +1,9 @@
 # mm-sstv – digitale Bildübertragung mit HS-Modem
 
 Bilder über auswählbare Soundkarten mit HS-Modem senden und empfangen.
-**8APSK · 7200 bit/s · 48 kHz · Datenmitte 1500 Hz · Referenzträger 100 Hz.**
+**8APSK · 6000 bit/s · 48 kHz · Datenmitte 1500 Hz · Referenzträger 100 Hz.**
 
-## Start und erster Synchronisationstest
+## Start
 
 ```bash
 git clone https://github.com/dj0abr/mm-modem.git
@@ -17,6 +17,14 @@ Unter **Setup → Audioausgang und Pegel…** sind beide einstellbar.
 **100 % entspricht weiterhin digitaler Vollaussteuerung.** Daten und Pilot werden
 gemeinsam geregelt, ohne AGC oder Abschneiden von Spitzen.
 
+Das Fenster startet mit höchstens **900 × 560 Pixeln**, angepasst an den verfügbaren
+Bildschirm, und lässt sich bis **640 × 440 Pixel** verkleinern. Formatwahl und
+**Senden/STOP** liegen direkt über dem Sendebild; Die flachen Fortschrittsbalken stehen
+unter dem jeweiligen Bild: **TX rot**, **RX grün**. Die Signalanzeige ist kompakt darunter angeordnet.
+Lange Dateinamen und Statusmeldungen werden abgekürzt und sind per Tooltip
+vollständig lesbar. Die Vorschauen passen sich dem Fenster an; die gewählte
+Größe des übertragenen Bildes bleibt davon unabhängig.
+
 ## Empfangen
 
 Der Empfang startet automatisch mit dem Eingang **fromQO100**. Im Setup lassen
@@ -27,8 +35,9 @@ gewünschte Frequenz im **RX2**-Kanal einstellen.
 Rechts im Fenster erscheinen Pilot-/Daten-Synchronisation und das empfangene Bild.
 Die Anzeige wächst während der Übertragung blockweise. Fehlende Blöcke bleiben
 im Fortschritt sichtbar und können bei einer erneuten Aussendung ergänzt werden.
-Das Kästchen **Empfang** hält die Aufnahme an oder startet sie neu. Senden und
-Empfangen können gleichzeitig laufen; **STOP** betrifft ausschließlich die Sendung.
+Der Empfang ist immer aktiviert. Nach einem Ausfall des gewählten Eingangs wird
+alle drei Sekunden erneut verbunden. Senden und Empfangen können gleichzeitig
+laufen; **STOP** betrifft ausschließlich die Sendung.
 
 Unter den Bildern zeigt ein Live-Monitor das **Empfangsspektrum von 0–4000 Hz**
 und die **8APSK-Konstellation**. Der Pilotsuchbereich ist schattiert, der erkannte
@@ -48,15 +57,9 @@ HS-Modems. Geräte auflisten, ohne Aufnahme oder Sendung zu starten:
 ./start.sh --list-inputs
 ```
 
-## Sende- und Synchronisationstest
-
-Für einen ersten Test ohne Bild unter **Test → Gültige HS-Modem-Testframes senden**
-starten. Anders als die bisherigen Zufallsdaten enthalten diese Aussendungen
-Synchronwort, Framezähler, CRC, Reed-Solomon und Scrambler. Der vorhandene
-HS-Modem-/QO100_TRX2-Empfänger kann damit seine Daten-Synchronisation bestätigen.
-Am Empfänger **8APSK 7200 bit/s** einstellen. **STOP** beendet den Test.
-Die frühere ungeframte Zufallsaussendung bleibt unter **Test → Zufallsdaten senden**
-verfügbar.
+Sender und Gegenstation auf **HS-Modem 8APSK mit 6000 bit/s** einstellen.
+Der Modus verwendet 2000 Symbole/s und ein etwa 2400 Hz breites Datenband.
+Der 100-Hz-Referenzträger und die digitale Vollaussteuerung bei 100 % bleiben erhalten.
 
 ## Bild senden
 
@@ -70,7 +73,7 @@ Rufzeichen oder sonstigen Texte in das Bild eingefügt. Die JPEG-Qualität wird
 bei Bedarf automatisch reduziert, damit die Datei höchstens 200000 Byte groß ist.
 
 Während des Sendens zeigt der Button **STOP** und der Fortschrittsbalken läuft.
-Der Anfang enthält ungefähr 6,3 Sekunden zur Akquisition, der letzte Frame wird
+Der Anfang enthält ungefähr 7,6 Sekunden zur Akquisition, der letzte Frame wird
 mehrfach wiederholt. Das erklärt einen Teil der angezeigten Sendedauer.
 Am normalen Ende werden die letzten Audiosamples vollständig abgespielt und der
 Audiostream automatisch geschlossen. **STOP** verwirft den Puffer sofort; ein
@@ -123,7 +126,8 @@ Die GUI-Prüfungen laufen mit simulierten Audioadaptern ohne Bildschirm.
 Die 16 übernommenen RX-Regressionstests sind ebenfalls enthalten.
 
 Optional lässt sich ein zusätzlich vorhandener RX-Kern als zweite Gegenstelle
-für die JPEG-Rundlaufprüfung eintragen:
+für die JPEG-Rundlaufprüfung eintragen. Dieser externe Decoder muss ebenfalls
+für **6000 bit/s** gebaut bzw. eingestellt sein:
 
 ```bash
 ./build.sh -DMM_SSTV_RX_PROBE=/Daten/funk/sat/QO100_TRX2/build/bin/qo100_mm_probe
@@ -152,6 +156,7 @@ exakt übertragenen JPEG-Bytes zum Vergleichen.
 
 ## Struktur und Portierung
 
+- `include/mm_sstv/modem_mode.hpp`: gemeinsame 6000-bit/s-Parameter für TX, RX und Bandanzeige.
 - `src/core/`: Betriebssystem-unabhängige Modulation und endlicher Bild-Audiostrom.
 - `src/protocol/`: Serialisierung, CRC16, RS(255,223), Scrambler, Fragmentierung und Bildrekonstruktion.
 - `src/receive/`: Qt-Prozess-/Audioadapter für den Empfang.
@@ -164,7 +169,7 @@ Der Protokollkern braucht weder Qt noch Betriebssystem-APIs. Er enthält einen
 kleinen eigenständigen Reed-Solomon-Encoder mit den exakten HS-Modem-Parametern.
 Die Senderimplementierung bindet keine Schifra-Bibliothek ein; der übernommene
 Empfangskern verwendet den originalen Schifra-Decoder. Bild- und Testdaten
-laufen durch denselben bestehenden Modulationskern bei 7200 bit/s.
+laufen durch denselben bestehenden Modulationskern bei 6000 bit/s.
 
 Die PortAudio-Adapter wurden einschließlich Bildsender und Aufnahme unter Linux kompiliert.
 Windows/macOS selbst sind noch nicht getestet. Dort sind passende Qt-,

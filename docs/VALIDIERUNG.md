@@ -1,5 +1,9 @@
 # Validierung – physikalischer Testsender (historischer Stand)
 
+Historischer Prüfbericht des 7200-bit/s-Stands. Aktuell senden und empfangen wir
+auf Benutzerwunsch mit 6000 bit/s; siehe [EMPFANG.md](EMPFANG.md) und
+[PROVENANCE.md](PROVENANCE.md).
+
 Aktueller Bildversand und gültige Frames: siehe [BILDVERSAND.md](BILDVERSAND.md).
 
 Stand vor der Bilderweiterung: 19.11.2026. Entwicklungsrechner: Linux x86-64, GCC 13.3, Qt 5.15.13,

@@ -9,8 +9,8 @@ class ReceiveMonitor final : public QWidget {
 public:
     explicit ReceiveMonitor(QWidget* parent = nullptr);
     void setStatus(const ReceiveStatus& status);
-    void clear(const QString& message = QStringLiteral("Empfang aus"));
-    QSize sizeHint() const override { return {1000, 210}; }
+    void clear(const QString& message = QStringLiteral("Warte auf Audiodaten"));
+    QSize sizeHint() const override { return {720, 120}; }
 protected:
     void paintEvent(QPaintEvent*) override;
 private:

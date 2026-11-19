@@ -7,13 +7,16 @@
 #include "hsmodem.h"
 #include "pilot_afc.h"
 #include "mm_sstv/audio_spectrum.hpp"
+#include "mm_sstv/modem_mode.hpp"
 #include <memory>
 #include <algorithm>
 #include <deque>
 #include <vector>
 #include <string>
 
-int bitsPerSymbol = 3, constellationSize = 8, speed = 7200;
+int bitsPerSymbol = 3, constellationSize = 8, speed = mm_sstv::ModemMode::bitRate;
+constexpr unsigned preDecimation = mm_sstv::ModemMode::rxDecimation;
+constexpr double pllRate = mm_sstv::ModemMode::pllSampleRate;
 constexpr double rate = 48000.0;
 
 int main(int argc, char** argv) {
@@ -53,13 +56,13 @@ int main(int argc, char** argv) {
     init_packer();
     auto nco = nco_crcf_create(LIQUID_NCO);
     nco_crcf_set_frequency(nco, 2 * M_PI * center / rate);
-    auto decim = firdecim_crcf_create_kaiser(5, 8, 40);
-    firdecim_crcf_set_scale(decim, 0.2f);
-    auto tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC, 4, 7, 0.2f, LIQUID_MODEM_APSK8);
+    auto decim = firdecim_crcf_create_kaiser(preDecimation, 8, 40);
+    firdecim_crcf_set_scale(decim, 1.f/preDecimation);
+    auto tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC, mm_sstv::ModemMode::rxSamplesPerSymbol, 7, 0.2f, LIQUID_MODEM_APSK8);
     km_symtrack_cccf_set_bandwidth(tracker, 0.9f);
     uint64_t samples = 0, frames = 0, symbols = 0;
     int pending = 0;
-    liquid_float_complex group[5];
+    liquid_float_complex group[preDecimation];
     std::deque<uint64_t> recent_frames;
     std::vector<liquid_float_complex> points;
     double power = 0;
@@ -89,7 +92,7 @@ int main(int argc, char** argv) {
         } else if (was_silent) {
             // Do not let the original AGC integrate exact zeros indefinitely.
             km_symtrack_cccf_destroy(tracker);
-            tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC, 4, 7, 0.2f, LIQUID_MODEM_APSK8);
+            tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC, mm_sstv::ModemMode::rxSamplesPerSymbol, 7, 0.2f, LIQUID_MODEM_APSK8);
             was_silent = false;
         }
         for (size_t i = 0; !silent && i < count; ++i) {
@@ -101,7 +104,7 @@ int main(int argc, char** argv) {
             liquid_float_complex input = {f, f}, mixed;
             nco_crcf_mix_down(nco, input, &mixed);
             group[pending++] = mixed;
-            if (pending != 5) continue;
+            if (pending != preDecimation) continue;
             pending = 0;
             liquid_float_complex y, out[8];
             firdecim_crcf_execute(decim, group, &y);
@@ -115,7 +118,7 @@ int main(int argc, char** argv) {
                 finite = finite && std::isfinite(out[j].real) && std::isfinite(out[j].imag);
             if (!finite) {
                 km_symtrack_cccf_destroy(tracker);
-                tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC, 4, 7, 0.2f, LIQUID_MODEM_APSK8);
+                tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC, mm_sstv::ModemMode::rxSamplesPerSymbol, 7, 0.2f, LIQUID_MODEM_APSK8);
                 continue;
             }
             ++symbols;
@@ -148,14 +151,14 @@ int main(int argc, char** argv) {
                 stable_estimates = 0;
                 // Transfer slow PLL correction into the audio mixer without a
                 // phase discontinuity. The inner PLL retains fast tracking.
-                double residual = nco_crcf_get_frequency(tracker->nco)*4800/(2*M_PI);
+                double residual = nco_crcf_get_frequency(tracker->nco)*pllRate/(2*M_PI);
                 if (now-lock_started >= 1 && std::isfinite(residual) && fabs(residual) > 0.2) {
                     double step = std::max(-0.5,std::min(0.5,0.15*residual));
                     double target = std::max(1400+PilotDetector::min_hz,std::min(1400+PilotDetector::max_hz,center+step));
                     step = target-center;
                     center = target;
                     nco_crcf_set_frequency(nco,2*M_PI*center/rate);
-                    nco_crcf_set_frequency(tracker->nco,2*M_PI*(residual-step)/4800);
+                    nco_crcf_set_frequency(tracker->nco,2*M_PI*(residual-step)/pllRate);
                 }
             } else if (scanned && (!frames || age > 2.5)) {
                 // Reject an unconfirmed tone after five seconds and try the
@@ -187,11 +190,11 @@ int main(int argc, char** argv) {
                         stable_estimates = 0;
                         nco_crcf_set_frequency(nco,2*M_PI*center/rate);
                         km_symtrack_cccf_destroy(tracker);
-                        tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC,4,7,0.2f,LIQUID_MODEM_APSK8);
+                        tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC,mm_sstv::ModemMode::rxSamplesPerSymbol,7,0.2f,LIQUID_MODEM_APSK8);
                         // Remove the old center's filter history after a jump.
                         firdecim_crcf_destroy(decim);
-                        decim = firdecim_crcf_create_kaiser(5,8,40);
-                        firdecim_crcf_set_scale(decim,0.2f);
+                        decim = firdecim_crcf_create_kaiser(preDecimation,8,40);
+                        firdecim_crcf_set_scale(decim,1.f/preDecimation);
                         pending = 0;
                         recent_frames.clear();
                         points.clear();
@@ -218,7 +221,7 @@ int main(int argc, char** argv) {
                    recent_frames.size(), age, (unsigned long long)rx_header_candidates,
                    (unsigned long long)rx_fec_failures, (unsigned long long)rx_crc_failures,
                    10*log10(std::max(power/count, 1e-20)), 20*log10(std::max(double(peak),1e-10)),
-                   nco_crcf_get_frequency(tracker->nco)*4800/(2*M_PI),
+                   nco_crcf_get_frequency(tracker->nco)*pllRate/(2*M_PI),
                    automatic ? "true" : "false",afc_state,center,center-1500,measured_pilot);
             for (size_t j = 0; j < points.size(); ++j)
                 printf("%s[%.4f,%.4f]", j ? "," : "", points[j].real, points[j].imag);
