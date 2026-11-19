@@ -7,7 +7,7 @@ public:
     using Consume = std::function<void(const float*, std::size_t)>;
     virtual ~AudioInput() = default;
     virtual std::vector<AudioDevice> devices() = 0;
-    virtual void start(const std::string& device, Consume consume) = 0;
+    virtual void start(const std::string& device, Consume consume, unsigned sampleRate = 48000) = 0;
     virtual void stop() noexcept = 0;
     virtual std::string error() const = 0;
 };

@@ -7,6 +7,7 @@
 #include <array>
 #include <cmath>
 #include <stdexcept>
+#include <vector>
 
 namespace mm_sstv {
 namespace {
@@ -20,8 +21,9 @@ struct TxModulator::Impl {
     firinterp_crcf filter = nullptr;
     nco_crcf carrier = nullptr;
     nco_crcf pilot = nullptr;
-    std::array<liquid_float_complex, samplesPerSymbol> interpolated{};
-    unsigned position = samplesPerSymbol;
+    std::vector<liquid_float_complex> interpolated;
+    ModeParameters mode = parameters(Modulation::Apsk8);
+    unsigned position = 24;
     float level = 0;
     float fullScaleFactor = 0;
     ~Impl() {
@@ -31,11 +33,14 @@ struct TxModulator::Impl {
         if (pilot) nco_crcf_destroy(pilot);
     }
 };
-TxModulator::TxModulator() : impl_(std::make_unique<Impl>()) {
+TxModulator::TxModulator(Modulation mode) : impl_(std::make_unique<Impl>()) {
     if (liquid_libversion_number() != LIQUID_VERSION_NUMBER)
         throw std::runtime_error("liquid-dsp: header/library version mismatch");
     auto& d = *impl_;
-    d.modem = modemcf_create(LIQUID_MODEM_APSK8);
+    d.mode = parameters(mode); d.position = d.mode.txSamplesPerSymbol;
+    d.interpolated.resize(d.mode.txSamplesPerSymbol);
+    const auto samplesPerSymbol = d.mode.txSamplesPerSymbol, sampleRate = d.mode.sampleRate;
+    d.modem = modemcf_create(mode == Modulation::Apsk8 ? LIQUID_MODEM_APSK8 : LIQUID_MODEM_QPSK);
     d.carrier = nco_crcf_create(LIQUID_NCO);
     d.pilot = nco_crcf_create(LIQUID_NCO);
     if (!d.modem || !d.carrier || !d.pilot) throw std::runtime_error("Cannot create modulator");
@@ -50,7 +55,7 @@ TxModulator::TxModulator() : impl_(std::make_unique<Impl>()) {
     const float offset = samplesPerSymbol * tau;
     float dt = offset - std::floor(offset);
     if (dt > .5f) dt -= 1.f;
-    std::array<float, 2 * samplesPerSymbol * 15 + 1> taps{};
+    std::vector<float> taps(2 * samplesPerSymbol * 15 + 1);
     check(liquid_firdes_prototype(LIQUID_FIRFILT_RRC, samplesPerSymbol, 15, .2f, dt, taps.data()));
     d.filter = firinterp_crcf_create(samplesPerSymbol, taps.data(), taps.size());
     if (!d.filter) throw std::runtime_error("Cannot create RRC interpolator");
@@ -61,7 +66,7 @@ TxModulator::TxModulator() : impl_(std::make_unique<Impl>()) {
     // points p,q: the symbol choices at the individual taps are independent.
     // Re(c)+Im(c) is bounded by sqrt(2)*|c| for every carrier phase.
     // This is sequence-independent: no AGC, limiter or sample clipping.
-    std::array<liquid_float_complex, 8> points{};
+    std::vector<liquid_float_complex> points(1u << d.mode.bitsPerSymbol);
     for (unsigned symbol = 0; symbol < points.size(); ++symbol)
         check(modemcf_modulate(d.modem, symbol, &points[symbol]));
     double maximum = 0;
@@ -81,16 +86,21 @@ TxModulator::TxModulator() : impl_(std::make_unique<Impl>()) {
     d.fullScaleFactor = static_cast<float>((32767. / 32768.) / (maximum * 1.00001));
 }
 TxModulator::~TxModulator() = default;
+unsigned TxModulator::sampleRateHz() const { return impl_->mode.sampleRate; }
 void TxModulator::render(float* output, std::size_t frames, SymbolSource& source, float gain) {
     if ((!output && frames) || !std::isfinite(gain) || gain < 0 || gain > 1)
         throw std::invalid_argument("Invalid audio buffer or gain");
     auto& d = *impl_;
+    const auto samplesPerSymbol = d.mode.txSamplesPerSymbol, sampleRate = d.mode.sampleRate;
     for (std::size_t n = 0; n < frames; ++n) {
         if (d.position == samplesPerSymbol) {
-            const auto symbol = source.next();
-            if (symbol > 7) throw std::invalid_argument("8APSK symbol outside 0..7");
+            auto symbol = source.next();
             liquid_float_complex point{};
-            check(modemcf_modulate(d.modem, symbol, &point));
+            if (symbol != SymbolSource::silence) {
+                if (symbol >= (1u << d.mode.bitsPerSymbol)) throw std::invalid_argument("Symbol outside selected constellation");
+                if (d.mode.bitsPerSymbol == 2) symbol ^= symbol >> 1; // Original HS-Modem QPSK pre-Gray mapping.
+                check(modemcf_modulate(d.modem, symbol, &point));
+            }
             check(firinterp_crcf_execute(d.filter, point, d.interpolated.data()));
             d.position = 0;
         }
@@ -99,7 +109,7 @@ void TxModulator::render(float* output, std::size_t frames, SymbolSource& source
         check(nco_crcf_mix_up(d.carrier, d.interpolated[d.position++], &mixed));
         check(nco_crcf_step(d.pilot));
         const float audio = d.fullScaleFactor * (mixed.real + mixed.imag + .25f * nco_crcf_sin(d.pilot));
-        constexpr float step = 1.f / (sampleRate / 200); // full-scale change in 5 ms
+        const float step = 1.f / (sampleRate / 200); // full-scale change in 5 ms
         d.level += std::clamp(gain - d.level, -step, step);
         output[n] = audio * d.level;
     }

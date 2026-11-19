@@ -13,10 +13,11 @@ Enthalten sind Pilotsuche/AFC (`pilot_afc.*` und Empfangsschleife aus `rx_probe.
 Downmixer, Vorfilter, Symboltracking, Header-/Rotationssuche, Descrambler,
 Reed-Solomon und Frame-CRC. Originalhinweise und die Schifra-Header bleiben erhalten.
 
-Aktueller Modus: **8APSK 6000 bit/s**, 2000 Symbole/s. Der Vorfilter dezimiert
-48 kHz um Faktor 6 auf 8 kHz; Symboltracking mit vier Samples pro Symbol und
-PLL-Nachführung mit 4000 Samples/s entsprechen dem originalen HS-Modem-Modus.
-Die gemeinsamen Parameter stehen in `include/mm_sstv/modem_mode.hpp`.
+Standardmodus: **8APSK 6000 bit/s**, wahlweise **QPSK 4410 bit/s**. Die nativen
+Parameter beider Modi stehen in `include/mm_sstv/modem_mode.hpp`. QPSK verwendet
+44,1 kHz Audio, RX-Vordezimation 5, 2205 Symbole/s und eine PLL-Rate von 4410 Hz.
+Die bisherige 8APSK-Kette mit 48 kHz und Vordezimation 6 bleibt erhalten.
+Siehe [QPSK4410.md](QPSK4410.md) für Mapping und Prüfungen.
 
 Die Such- und Nachführregeln bleiben unverändert: 20–900 Hz Pilotsuche mit
 überlappenden FFTs, stabile Kandidaten, Verwerfen unbestätigter Töne,
@@ -26,7 +27,7 @@ unterstützt. Die Datenmitte liegt stets 1400 Hz über dem Piloten.
 
 Der Kern läuft als mitgeliefertes Programm `mm-sstv-rx-core`. Das isoliert die
 ursprünglichen statischen RX-Zustände vom Sender. Der Qt-Adapter `Receiver`
-übergibt Mono-Float-Audio bei 48 kHz und verarbeitet die JSON-Frame-/Statusausgabe.
+übergibt Mono-Float-Audio bei 48 bzw. 44,1 kHz und verarbeitet die JSON-Frame-/Statusausgabe.
 Die Verbindung benutzt ausschließlich lokale Prozess-Pipes, keine UDP-Ports und
 keinen Netzwerkserver. Der Build braucht kein bestehendes Nachbarprojekt.
 
@@ -43,7 +44,7 @@ Vollaussteuerungsnormierung bleiben unverändert.
 
 ## Live-Spektrum und Konstellation
 
-Unter den Bildern liegen ein natives Qt-Spektrum und das 8APSK-Konstellationsdiagramm
+Unter den Bildern liegen ein natives Qt-Spektrum und das Konstellationsdiagramm des gewählten Modus
 in einer standardmäßig 120 Pixel hohen Leiste.
 Die Prozessbrücke aktiviert dafür `mm-sstv-rx-core --monitor`. Ohne diese Option
 bleibt die bisherige Statusausgabe unverändert. Bereits vorhandene `points` werden
@@ -52,18 +53,18 @@ kurze Spur. Bestätigte Datensynchronisation färbt die Punkte grün, ansonsten 
 Ein Träger allein wird weiterhin nicht als Datensynchronisation angezeigt.
 
 Die zusätzliche portable Klasse `AudioSpectrum` berechnet unabhängig vom Decoder
-und dessen Pilotsuche ein Hann-Fenster mit 32768 Samples bei 48 kHz. Sie benutzt
+und dessen Pilotsuche ein Hann-Fenster mit 32768 Samples bei der nativen Abtastrate des Modus. Sie benutzt
 liquid-dsp, keine zusätzliche Bibliothek und keine Betriebssystem-API.
 Das Eingangsaudio wird vor Downmixer, AFC und AGC analysiert. Die Anzeige wird mit
-den vorhandenen 100-ms-Statusmeldungen aktualisiert, erstmals nach etwa 0,7 Sekunden.
-Die Auflösung beträgt 1,465 Hz; dargestellt werden 0–4000 Hz und 0 bis −140 dBFS/Bin.
+den vorhandenen 100-ms-Statusmeldungen aktualisiert, erstmals nach etwa 0,7–0,8 Sekunden.
+Die Auflösung beträgt 1,465 Hz bei 48 kHz bzw. 1,346 Hz bei 44,1 kHz; dargestellt werden 0–4000 Hz und 0 bis −140 dBFS/Bin.
 Ein Sinus mit Spitzenamplitude 1 genau auf einem FFT-Bin entspricht 0 dBFS/Bin;
 Fensterverluste bei Zwischenfrequenzen sind möglich. Der Pegel oben rechts ist
 der RMS-Pegel des Eingangs. Die FFT erhält keine automatische Pegelnormierung.
 
 Der Bereich 20–900 Hz markiert die Pilotsuche. Die grüne Linie folgt dem vom
 Decoder gewählten Piloten, die gelben Linien markieren die aktuelle Datenmitte
-±1200 Hz (2000 Symbole/s, RRC-Rolloff 0,2). Beim Verkleinern bleiben schmale
+±1200 Hz bei 8APSK bzw. ±1323 Hz bei QPSK (jeweils RRC-Rolloff 0,2). Beim Verkleinern bleiben schmale
 Träger durch das Maximum der FFT-Bins pro Pixel sichtbar. Die feste I/Q-Skalierung
 verhindert eine scheinbar saubere Konstellation durch automatische Größenanpassung.
 
@@ -111,6 +112,8 @@ werden. Die originale JPEG-Datei wird mit QSaveFile atomar abgelegt.
   Mindestfenster 640 × 440 Pixel. Beide Vorschauen werden proportional verkleinert,
   ohne das gewählte Sendeformat zu verändern. Lange Namen und Meldungen erscheinen
   abgekürzt; der Tooltip enthält den vollständigen Text.
+- Die Auswahl unten rechts schaltet TX und RX gemeinsam zwischen 8APSK 6000
+  und QPSK 4410 um. Sie wird gespeichert und ist während TX gesperrt.
 - Audioeingang standardmäßig `fromQO100`, Audioausgang weiterhin `toQO100`.
   Beide sind im Setup auswählbar; es gibt keinen stillen Wechsel auf ein anderes Gerät.
 - Empfang ist immer aktiviert und startet beim Programmstart automatisch. Alte
@@ -126,9 +129,11 @@ werden. Die originale JPEG-Datei wird mit QSaveFile atomar abgelegt.
 
 ## Prüfung
 
-Die elf eigenständigen CTest-Gruppen enthalten zusätzlich zu den bisherigen
+Die vierzehn eigenständigen CTest-Gruppen enthalten zusätzlich zu den bisherigen
 Sendetests:
 
+- Zusätzliche QPSK-Regressionen, unabhängiger Original-Wellenformvergleich,
+  Bildrundlauf, Qt-Prozessbrücke und native 44,1-kHz-Audioadapter: siehe [QPSK4410.md](QPSK4410.md).
 - Alle 16 übernommenen QO100_RX-Regressionstests, mit 6000-bit/s-Fixtures:
   Frequenzversatz bis +750 Hz,
   negative Versätze, 500-Hz-Pilot, Drift, Frequenzsprünge, Signalverlust, erneute

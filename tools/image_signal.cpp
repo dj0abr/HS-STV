@@ -19,16 +19,23 @@ void word(std::ostream& out, std::uint32_t value, unsigned bytes) {
 int main(int argc, char** argv) {
     QCoreApplication app(argc, argv);
     try {
-        if (argc != 3 && argc != 6) {
-            std::cerr << "Usage: mm-sstv-image-signal INPUT OUTPUT.wav [WIDTH HEIGHT LEVEL_PERCENT]\n"; return 2;
+        if (argc != 3 && argc != 6 && argc != 7) {
+            std::cerr << "Usage: mm-sstv-image-signal INPUT OUTPUT.wav [WIDTH HEIGHT LEVEL_PERCENT [8apsk|qpsk4410]]\n"; return 2;
         }
-        const int width = argc == 6 ? std::stoi(argv[3]) : 640, height = argc == 6 ? std::stoi(argv[4]) : 480;
-        const int level = argc == 6 ? std::stoi(argv[5]) : 100;
+        const int width = argc >= 6 ? std::stoi(argv[3]) : 640, height = argc >= 6 ? std::stoi(argv[4]) : 480;
+        const int level = argc >= 6 ? std::stoi(argv[5]) : 100;
         if (level < 0 || level > 100) throw std::invalid_argument("Level must be 0..100");
         QImageReader reader(QString::fromLocal8Bit(argv[1])); reader.setAutoTransform(true);
         const auto original = reader.read();
+        auto mode = mm_sstv::Modulation::Apsk8;
+        if (argc == 7) {
+            const std::string value(argv[6]);
+            if (value == "qpsk4410") mode = mm_sstv::Modulation::Qpsk4410;
+            else if (value != "8apsk") throw std::invalid_argument("Modulation must be 8apsk or qpsk4410");
+        }
+        const auto sampleRate = mm_sstv::parameters(mode).sampleRate;
         const auto picture = mm_sstv::preparePicture(original, QSize(width, height));
-        auto transmission = mm_sstv::prepareImage(picture.jpeg, QFileInfo(QString::fromLocal8Bit(argv[1])).fileName().toUtf8().toStdString());
+        auto transmission = mm_sstv::prepareImage(picture.jpeg, QFileInfo(QString::fromLocal8Bit(argv[1])).fileName().toUtf8().toStdString(), mode);
         const auto count = transmission.audioFrames();
         mm_sstv::ImageAudio signal(std::move(transmission));
         std::ofstream jpeg(std::string(argv[2]) + ".jpg", std::ios::binary);
@@ -36,7 +43,7 @@ int main(int argc, char** argv) {
         jpeg.write(reinterpret_cast<const char*>(picture.jpeg.data()), picture.jpeg.size()); jpeg.close();
         std::ofstream out(argv[2], std::ios::binary); out.exceptions(std::ios::badbit | std::ios::failbit);
         out.write("RIFF", 4); word(out, 36 + count * 2, 4); out.write("WAVEfmt ", 8);
-        word(out, 16, 4); word(out, 1, 2); word(out, 1, 2); word(out, 48000, 4); word(out, 96000, 4);
+        word(out, 16, 4); word(out, 1, 2); word(out, 1, 2); word(out, sampleRate, 4); word(out, sampleRate * 2, 4);
         word(out, 2, 2); word(out, 16, 2); out.write("data", 4); word(out, count * 2, 4);
         std::array<float, 960> buffer{};
         while (const auto frames = signal.render(buffer.data(), buffer.size(), level / 100.f)) {

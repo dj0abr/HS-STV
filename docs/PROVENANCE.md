@@ -107,3 +107,19 @@ Die GUI bietet keine Testaussendungen und keinen Empfangsschalter mehr.
 Der Empfang ist dauerhaft aktiviert, mit Wiederverbindung nach Gerätefehlern.
 Das Testsender-API für automatisierte Audiotests und die Offline-WAV-Werkzeuge
 bleiben intern bzw. separat verfügbar.
+
+## QPSK 4410
+
+Der neue wählbare Modus entspricht dem ursprünglichen HS-Modem-Eintrag
+`{44100, 20, 5, 2, 4410, 3600}`. Modulation mit `LIQUID_MODEM_QPSK` und beidseitige
+Zwei-Bit-Gray-Umwandlung stammen als Verfahrensreferenz aus `liquid_if.cpp`.
+Die bereits übernommenen QPSK-Rotationstabellen, Bytekonvertierung, FEC und CRC
+werden unverändert benutzt; es wurde kein eigener QPSK-Framer eingeführt.
+
+Die Soundkartenadapter und die portable DSP-/Monitor-Schicht unterstützen
+zusätzlich native 44100 Hz. Pilotsuche und AFC bleiben gleich, erhalten aber
+die passende Frequenz- und Zeitkalibrierung. Ein- und Ausgabeadapter sowie
+CLI-Rundlauf werden mit den originalen 4410-bit/s-Parametern geprüft.
+Die 8APSK-Wellenform bleibt im unabhängigen Vergleich unverändert.
+[QPSK4410.md](QPSK4410.md) beschreibt Details und Referenztests.
+Die benachbarten Originalprojekte wurden nur gelesen und nicht verändert.

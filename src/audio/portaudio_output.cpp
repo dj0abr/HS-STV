@@ -28,7 +28,7 @@ public:
         }
         return result;
     }
-    void start(const std::string& device, Render render) override {
+    void start(const std::string& device, Render render, unsigned sampleRate) override {
         stop();
         { std::lock_guard<std::mutex> lock(errorMutex_); error_.clear(); }
         underruns_ = 0; finished_ = false; ending_ = false;
@@ -44,13 +44,13 @@ public:
         }
         if (found < 0) throw std::runtime_error("Audio device unavailable: " + device);
         PaStreamParameters format{found, 1, paFloat32, .04, nullptr};
-        if (Pa_IsFormatSupported(nullptr, &format, 48000) != paFormatIsSupported) {
+        if (Pa_IsFormatSupported(nullptr, &format, sampleRate) != paFormatIsSupported) {
             format.channelCount = 2;
-            check(Pa_IsFormatSupported(nullptr, &format, 48000));
+            check(Pa_IsFormatSupported(nullptr, &format, sampleRate));
         }
         channels_ = format.channelCount; render_ = std::move(render);
         try {
-            check(Pa_OpenStream(&stream_, nullptr, &format, 48000, 480, paClipOff | paDitherOff, callback, this));
+            check(Pa_OpenStream(&stream_, nullptr, &format, sampleRate, sampleRate / 100, paClipOff | paDitherOff, callback, this));
             check(Pa_SetStreamFinishedCallback(stream_, [](void* self) {
                 static_cast<PortAudioOutput*>(self)->finished_ = true;
             }));

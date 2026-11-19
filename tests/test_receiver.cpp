@@ -43,10 +43,11 @@ void checkPreviewWarnings(const PreparedPicture& picture) {
 class FakeInput final : public AudioInput {
 public:
     Consume receive;
+    unsigned sampleRate = 0;
     std::vector<AudioDevice> devices() override { return {{"fromQO100", "fromQO100"}}; }
-    void start(const std::string& device, Consume consumer) override {
+    void start(const std::string& device, Consume consumer, unsigned rate = 48000) override {
         if (device != "fromQO100") throw std::runtime_error("Wrong device");
-        receive = std::move(consumer);
+        sampleRate = rate; receive = std::move(consumer);
     }
     void stop() noexcept override { receive = {}; }
     std::string error() const override { return {}; }
@@ -55,16 +56,18 @@ int main(int argc, char** argv) {
     QCoreApplication app(argc, argv);
     originalHandler = qInstallMessageHandler(countWarnings);
     try {
+        const auto mode = argc > 1 && std::string(argv[1]) == "qpsk4410" ? Modulation::Qpsk4410 : Modulation::Apsk8;
         QImage original(640, 480, QImage::Format_RGB32);
         for (int y = 0; y < original.height(); ++y) for (int x = 0; x < original.width(); ++x)
             original.setPixel(x, y, qRgb((x * 3 + y) % 256, (x + y * 2) % 256, x % 256));
         const auto picture = preparePicture(original, original.size());
         checkPreviewWarnings(picture);
-        ImageAudio audio(prepareImage(picture.jpeg, "receive-test.jpg"));
+        ImageAudio audio(prepareImage(picture.jpeg, "receive-test.jpg", mode));
         auto input = std::make_unique<FakeInput>(); auto* source = input.get(); Receiver rx(std::move(input));
         unsigned previews = 0; bool locked = false, complete = false, spectrumSeen = false, pointsSeen = false, silenceSeen = false; QString failure;
         rx.failed = [&](const auto& text) { failure = text; };
         rx.statusChanged = [&](const ReceiveStatus& status) {
+            if (status.modulation != mode) throw std::runtime_error("Wrong RX mode");
             locked |= status.locked;
             pointsSeen |= status.locked && status.points.size() >= 40;
             if (status.spectrum.size() > 2700 && status.spectrumBinHz > 1 && status.spectrumBinHz < 2) {
@@ -79,7 +82,9 @@ int main(int argc, char** argv) {
                 if (decodeReceivedJpeg(image.jpeg, true).size() != picture.preview.size()) throw std::runtime_error("Final JPEG not decoded");
             } else if (!decodeReceivedJpeg(image.jpeg, false).isNull()) ++previews;
         };
-        rx.start("fromQO100"); std::array<float, 4800> block{};
+        rx.start("fromQO100", mode);
+        if (source->sampleRate != parameters(mode).sampleRate) throw std::runtime_error("Wrong capture rate");
+        std::array<float, 4800> block{};
         while (const auto count = audio.render(block.data(), block.size(), .6f)) {
             source->receive(block.data(), count); QCoreApplication::processEvents(); QThread::msleep(2);
             if (!failure.isEmpty()) throw std::runtime_error(failure.toStdString());

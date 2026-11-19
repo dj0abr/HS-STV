@@ -1,7 +1,8 @@
 # mm-sstv – digitale Bildübertragung mit HS-Modem
 
 Bilder über auswählbare Soundkarten mit HS-Modem senden und empfangen.
-**8APSK · 6000 bit/s · 48 kHz · Datenmitte 1500 Hz · Referenzträger 100 Hz.**
+**8APSK · 6000 bit/s oder QPSK · 4410 bit/s.**
+Datenmitte 1500 Hz · Referenzträger 100 Hz · HS-Modem-kompatibel.
 
 ## Start
 
@@ -40,7 +41,7 @@ alle drei Sekunden erneut verbunden. Senden und Empfangen können gleichzeitig
 laufen; **STOP** betrifft ausschließlich die Sendung.
 
 Unter den Bildern zeigt ein Live-Monitor das **Empfangsspektrum von 0–4000 Hz**
-und die **8APSK-Konstellation**. Der Pilotsuchbereich ist schattiert, der erkannte
+und die **Konstellation der gewählten Modulation**. Der Pilotsuchbereich ist schattiert, der erkannte
 Pilot grün markiert, die Grenzen des aktuellen Datenbands gelb gestrichelt.
 Die Konstellationspunkte erscheinen bei bestätigter Datensynchronisation grün.
 
@@ -57,9 +58,17 @@ HS-Modems. Geräte auflisten, ohne Aufnahme oder Sendung zu starten:
 ./start.sh --list-inputs
 ```
 
-Sender und Gegenstation auf **HS-Modem 8APSK mit 6000 bit/s** einstellen.
-Der Modus verwendet 2000 Symbole/s und ein etwa 2400 Hz breites Datenband.
-Der 100-Hz-Referenzträger und die digitale Vollaussteuerung bei 100 % bleiben erhalten.
+Unten rechts zwischen **8APSK · 6000 bit/s** und **QPSK · 4410 bit/s** wählen.
+Die Auswahl gilt für Sender und Empfänger und wird gespeichert. Während einer
+Sendung ist sie gesperrt. **Beide Gegenstellen gleich einstellen.** 8APSK bleibt
+der Standard, solange keine andere Wahl gespeichert ist.
+
+QPSK 4410 verwendet wie HS-Modem 2205 Symbole/s und 44,1-kHz-Audio. Es ist für
+schwächere Signale vorgesehen und besitzt etwa 2646 Hz Datenbandbreite; 8APSK 6000
+verwendet 48 kHz, 2000 Symbole/s und etwa 2400 Hz Datenbandbreite. Die Software
+stellt die Audioadapter automatisch passend ein. Der 100-Hz-Referenzträger und
+100 % als digitale Vollaussteuerung bleiben erhalten.
+[Technik und Prüfungen von QPSK 4410](docs/QPSK4410.md).
 
 ## Bild senden
 
@@ -73,7 +82,7 @@ Rufzeichen oder sonstigen Texte in das Bild eingefügt. Die JPEG-Qualität wird
 bei Bedarf automatisch reduziert, damit die Datei höchstens 200000 Byte groß ist.
 
 Während des Sendens zeigt der Button **STOP** und der Fortschrittsbalken läuft.
-Der Anfang enthält ungefähr 7,6 Sekunden zur Akquisition, der letzte Frame wird
+Der Anfang enthält ungefähr 7,6 Sekunden bei 8APSK bzw. 10,3 Sekunden bei QPSK zur Akquisition, der letzte Frame wird
 mehrfach wiederholt. Das erklärt einen Teil der angezeigten Sendedauer.
 Am normalen Ende werden die letzten Audiosamples vollständig abgespielt und der
 Audiostream automatisch geschlossen. **STOP** verwirft den Puffer sofort; ein
@@ -135,8 +144,8 @@ ctest --test-dir build --output-on-failure
 ```
 
 Ein Bild-Rundlauf einschließlich AFC bei +81 Hz wird bereits mit dem mitgebauten
-Empfangskern geprüft. Der optionale Eintrag ergänzt eine zwölfte Prüfgruppe zum
-Vergleich mit der bisherigen externen Installation. Ohne ihn stehen elf
+Empfangskern geprüft. Der optionale Eintrag ergänzt eine fünfzehnte Prüfgruppe zum
+Vergleich mit der bisherigen externen Installation. Ohne ihn stehen vierzehn
 eigenständige Prüfgruppen zur Verfügung, einschließlich 64 Original-Framevektoren.
 
 ## Offline-Audiodateien
@@ -156,7 +165,7 @@ exakt übertragenen JPEG-Bytes zum Vergleichen.
 
 ## Struktur und Portierung
 
-- `include/mm_sstv/modem_mode.hpp`: gemeinsame 6000-bit/s-Parameter für TX, RX und Bandanzeige.
+- `include/mm_sstv/modem_mode.hpp`: native Parameter beider Modi für TX, RX, Audio und Anzeige.
 - `src/core/`: Betriebssystem-unabhängige Modulation und endlicher Bild-Audiostrom.
 - `src/protocol/`: Serialisierung, CRC16, RS(255,223), Scrambler, Fragmentierung und Bildrekonstruktion.
 - `src/receive/`: Qt-Prozess-/Audioadapter für den Empfang.
@@ -169,7 +178,7 @@ Der Protokollkern braucht weder Qt noch Betriebssystem-APIs. Er enthält einen
 kleinen eigenständigen Reed-Solomon-Encoder mit den exakten HS-Modem-Parametern.
 Die Senderimplementierung bindet keine Schifra-Bibliothek ein; der übernommene
 Empfangskern verwendet den originalen Schifra-Decoder. Bild- und Testdaten
-laufen durch denselben bestehenden Modulationskern bei 6000 bit/s.
+laufen durch denselben Modulationskern mit den Parametern des gewählten Modus.
 
 Die PortAudio-Adapter wurden einschließlich Bildsender und Aufnahme unter Linux kompiliert.
 Windows/macOS selbst sind noch nicht getestet. Dort sind passende Qt-,

@@ -11,7 +11,7 @@ class PulseInput final : public AudioInput {
 public:
     ~PulseInput() override { stop(); }
     std::vector<AudioDevice> devices() override { detail::PulseConnection c; return c.devices(true); }
-    void start(const std::string& device, Consume consume) override {
+    void start(const std::string& device, Consume consume, unsigned sampleRate) override {
         stop(); { std::lock_guard<std::mutex> lock(mutex_); error_.clear(); }
         stopping_ = false; consume_ = std::move(consume);
         try {
@@ -19,11 +19,11 @@ public:
             const auto devices = connection_->devices(true);
             bool found = false; for (const auto& d : devices) found |= d.id == device;
             if (!found) throw std::runtime_error("Audioeingang nicht verfügbar: " + device);
-            const pa_sample_spec format{PA_SAMPLE_FLOAT32NE, 48000, 1};
+            const pa_sample_spec format{PA_SAMPLE_FLOAT32NE, sampleRate, 1};
             stream_ = pa_stream_new(connection_->context, "mm-sstv Empfang", &format, nullptr);
             if (!stream_) connection_->fail();
             pa_stream_set_read_callback(stream_, read, this);
-            const pa_buffer_attr buffer{38400, UINT32_MAX, UINT32_MAX, UINT32_MAX, 1920};
+            const pa_buffer_attr buffer{sampleRate * 4 / 5, UINT32_MAX, UINT32_MAX, UINT32_MAX, sampleRate * 4 / 100};
             if (pa_stream_connect_record(stream_, device.c_str(), &buffer,
                     static_cast<pa_stream_flags_t>(PA_STREAM_ADJUST_LATENCY | PA_STREAM_DONT_MOVE)) < 0) connection_->fail();
             connection_->wait([&] {

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Real playback on a private PulseAudio server, never on the user's station."""
 import os
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -84,6 +85,24 @@ with tempfile.TemporaryDirectory(prefix='mm-sstv-audio-') as folder:
         missing = subprocess.run([driver, 'capture', 'missing-input', '100', str(root/'missing.raw')], env=env, capture_output=True, text=True, timeout=5)
         assert missing.returncode != 0, 'Capture silently fell back to a different source'
         print('Native input: explicit source, float48k, concurrent playback/capture, final marker and missing-source handling pass')
+        # Exercise both audio adapters at 44.1 kHz against a 48-kHz sink.
+        qpsk_file = root/'capture44100.raw'
+        capture_q = subprocess.Popen([driver, 'capture', 'mm_sstv_test.monitor', '1600', str(qpsk_file), '44100'], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        children.append(capture_q); assert capture_q.stdout.readline().strip() == 'capturing'
+        assert '44100Hz' in json.dumps(json.loads(pactl('-f', 'json', 'list', 'source-outputs'))), 'Input did not request 44.1 kHz'
+        play_q = subprocess.Popen([driver, 'finite44100', 'mm_sstv_test', '1000'], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        children.append(play_q)
+        for _ in range(30):
+            if '44100Hz' in json.dumps(json.loads(pactl('-f', 'json', 'list', 'sink-inputs'))): break
+            time.sleep(.02)
+        else: raise AssertionError('Output did not request 44.1 kHz')
+        output_q, error_q = play_q.communicate(timeout=5); assert play_q.returncode == 0, error_q
+        assert 'drained 44100 samples' in output_q
+        capture_q.communicate(timeout=4); assert capture_q.returncode == 0
+        data_q = np.fromfile(qpsk_file, dtype='<f4')
+        assert np.count_nonzero(data_q > .1) > 43500, '44.1-kHz capture lost native samples'
+        assert np.count_nonzero(data_q > .3) > 420, '44.1-kHz capture lost end marker'
+        print('Native 44.1-kHz input/output verified on a 48-kHz sink, including resampling and drain')
         result = subprocess.run([driver, 'cycles', 'mm_sstv_test', '200'], env=env, capture_output=True, text=True, timeout=8)
         assert result.returncode == 0 and result.stdout.count('stopped') == 3, result
         print('Three START/STOP cycles passed')

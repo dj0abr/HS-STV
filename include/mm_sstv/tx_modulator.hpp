@@ -10,14 +10,16 @@ namespace mm_sstv {
 class SymbolSource {
 public:
     virtual ~SymbolSource() = default;
-    virtual unsigned next() = 0; // Three bits, in transmission order; value 0..7.
+    static constexpr unsigned silence = ~0u;
+    virtual unsigned next() = 0; // MSB-first logical symbols, or zero-baseband silence.
 };
 class RandomSymbols final : public SymbolSource {
 public:
-    explicit RandomSymbols(std::uint32_t seed) : engine_(seed) {}
-    unsigned next() override { return engine_() & 7u; }
+    explicit RandomSymbols(std::uint32_t seed, Modulation mode = Modulation::Apsk8) : engine_(seed), mask_((1u << parameters(mode).bitsPerSymbol) - 1) {}
+    unsigned next() override { return engine_() & mask_; }
 private:
     std::mt19937 engine_;
+    unsigned mask_;
 };
 // No GUI, audio device, thread or operating-system dependencies.
 // Keep one instance for the whole transmission, including partial symbols.
@@ -30,7 +32,8 @@ public:
     static constexpr unsigned carrierHz = 1500;
     static constexpr unsigned pilotHz = 100;
     static_assert(sampleRate % symbolRate == 0, "Symbol rate must divide sample rate");
-    TxModulator();
+    explicit TxModulator(Modulation mode = Modulation::Apsk8);
+    unsigned sampleRateHz() const;
     ~TxModulator();
     TxModulator(const TxModulator&) = delete;
     TxModulator& operator=(const TxModulator&) = delete;

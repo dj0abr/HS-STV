@@ -12,23 +12,27 @@ namespace {
 void require(bool ok, const char* reason) { if (!ok) throw std::runtime_error(reason); }
 // Independent, symbol-at-a-time transcription of the original HS-Modem TX
 // calculation. No mm-sstv filtering or mixer helpers are used here.
-std::vector<float> reference(std::size_t symbols, unsigned seed) {
-    auto mod = modemcf_create(LIQUID_MODEM_APSK8);
+std::vector<float> reference(std::size_t symbols, unsigned seed, Modulation mode = Modulation::Apsk8) {
+    const bool qpsk = mode == Modulation::Qpsk4410;
+    const unsigned rate = qpsk ? 44100 : 48000, k = qpsk ? 20 : 24;
+    auto mod = modemcf_create(qpsk ? LIQUID_MODEM_QPSK : LIQUID_MODEM_APSK8);
     auto carrier = nco_crcf_create(LIQUID_NCO), pilot = nco_crcf_create(LIQUID_NCO);
     constexpr float pi = 3.14159265358979323846f;
-    nco_crcf_set_frequency(carrier, 2.f * pi * 1500.f / 48000.f);
-    nco_crcf_set_frequency(pilot, 2.f * pi * 100.f / 48000.f);
+    nco_crcf_set_frequency(carrier, 2.f * pi * 1500.f / float(rate));
+    nco_crcf_set_frequency(pilot, 2.f * pi * 100.f / float(rate));
     float tau = -.2f; while (tau < 0) tau += 1;
-    float g = 24 * tau; int ds = static_cast<int>(std::floor(g)); float dt = g - ds;
+    float g = k * tau; int ds = static_cast<int>(std::floor(g)); float dt = g - ds;
     if (dt > .5f) { dt -= 1; ++ds; }
-    float h[721]; liquid_firdes_prototype(LIQUID_FIRFILT_RRC, 24, 15, .2f, dt, h);
-    auto filter = firinterp_crcf_create(24, h, 721);
+    std::vector<float> h(2*k*15+1); liquid_firdes_prototype(LIQUID_FIRFILT_RRC, k, 15, .2f, dt, h.data());
+    auto filter = firinterp_crcf_create(k, h.data(), h.size());
     std::mt19937 bits(seed);
-    std::vector<float> out; out.reserve(symbols * 24);
+    std::vector<float> out; out.reserve(symbols * k);
     for (std::size_t i = 0; i < symbols; ++i) {
         liquid_float_complex point{}, samples[24];
-        modemcf_modulate(mod, bits() & 7u, &point); firinterp_crcf_execute(filter, point, samples);
-        for (auto value : samples) {
+        unsigned symbol = bits() & (qpsk ? 3u : 7u); if (qpsk) symbol ^= symbol >> 1;
+        modemcf_modulate(mod, symbol, &point); firinterp_crcf_execute(filter, point, samples);
+        for (unsigned j = 0; j < k; ++j) {
+            const auto value = samples[j];
             nco_crcf_step(carrier); liquid_float_complex c{}; nco_crcf_mix_up(carrier, value, &c);
             nco_crcf_step(pilot);
             out.push_back(.1f * (c.real + c.imag + nco_crcf_sin(pilot) / 4.f));
@@ -39,36 +43,38 @@ std::vector<float> reference(std::size_t symbols, unsigned seed) {
 }
 // Construct the symbol history that maximizes a real audio sample. This
 // checks worst-case pulse-shaping overshoot rather than trusting a random seed.
-std::vector<unsigned> peakSequence(std::size_t& target) {
+std::vector<unsigned> peakSequence(std::size_t& target, Modulation mode = Modulation::Apsk8) {
+    const bool qpsk = mode == Modulation::Qpsk4410;
+    const unsigned rate = qpsk ? 44100 : 48000, k = qpsk ? 20 : 24, count = qpsk ? 4 : 8;
     float tau = -.2f; while (tau < 0) tau += 1;
-    float dt = 24 * tau - std::floor(24 * tau); if (dt > .5f) dt -= 1;
-    float taps[721]; liquid_firdes_prototype(LIQUID_FIRFILT_RRC, 24, 15, .2f, dt, taps);
-    auto modem = modemcf_create(LIQUID_MODEM_APSK8);
+    float dt = k * tau - std::floor(k * tau); if (dt > .5f) dt -= 1;
+    std::vector<float> taps(2*k*15+1); liquid_firdes_prototype(LIQUID_FIRFILT_RRC, k, 15, .2f, dt, taps.data());
+    auto modem = modemcf_create(qpsk ? LIQUID_MODEM_QPSK : LIQUID_MODEM_APSK8);
     auto carrier = nco_crcf_create(LIQUID_NCO), pilot = nco_crcf_create(LIQUID_NCO);
     constexpr float pi = 3.14159265358979323846f;
-    nco_crcf_set_frequency(carrier, 2.f * pi * 1500.f / 48000.f);
-    nco_crcf_set_frequency(pilot, 2.f * pi * 100.f / 48000.f);
+    nco_crcf_set_frequency(carrier, 2.f * pi * 1500.f / float(rate));
+    nco_crcf_set_frequency(pilot, 2.f * pi * 100.f / float(rate));
     liquid_float_complex points[8];
-    for (unsigned i = 0; i < 8; ++i) modemcf_modulate(modem, i, &points[i]);
+    for (unsigned i = 0; i < count; ++i) modemcf_modulate(modem, i, &points[i]);
     double best = 0; std::vector<unsigned> sequence;
-    for (std::size_t n = 0; n < 2880; ++n) {
+    for (std::size_t n = 0; n < (qpsk ? 12000u : 2880u); ++n) {
         nco_crcf_step(carrier); nco_crcf_step(pilot);
         if (n < 2000) continue;
         float projection[8];
-        for (unsigned i = 0; i < 8; ++i) {
+        for (unsigned i = 0; i < count; ++i) {
             liquid_float_complex mixed{}; nco_crcf_mix_up(carrier, points[i], &mixed);
             projection[i] = mixed.real + mixed.imag;
         }
         for (const double direction : {-1., 1.}) {
             double amplitude = direction * .25 * nco_crcf_sin(pilot);
-            std::vector<unsigned> candidate(n / 24 + 1, 0);
-            for (std::size_t tap = n % 24; tap < 721; tap += 24) {
+            std::vector<unsigned> candidate(n / k + 1, 0);
+            for (std::size_t tap = n % k; tap < taps.size(); tap += k) {
                 double maximum = -1e30; unsigned symbol = 0;
-                for (unsigned i = 0; i < 8; ++i) {
+                for (unsigned i = 0; i < count; ++i) {
                     const double value = direction * taps[tap] * projection[i];
                     if (value > maximum) { maximum = value; symbol = i; }
                 }
-                candidate[n / 24 - tap / 24] = symbol; amplitude += maximum;
+                candidate[n / k - tap / k] = qpsk ? (symbol ^ (symbol >> 1)) : symbol; amplitude += maximum;
             }
             if (amplitude > best) { best = amplitude; sequence = candidate; target = n; }
         }
@@ -117,18 +123,32 @@ int main() {
         halfModulator.render(half.data(), half.size(), halfSource, .5f);
         for (std::size_t i = 1000; i < half.size(); ++i)
             require(std::abs(half[i] - whole[i] * .5f) < 1e-6f, "Gain is not linear for data and pilot");
-        std::size_t target = 0;
-        struct PeakSource : SymbolSource {
-            std::vector<unsigned> symbols; std::size_t index = 0;
-            unsigned next() override { return index < symbols.size() ? symbols[index++] : 0; }
-        } worst;
-        worst.symbols = peakSequence(target);
-        TxModulator worstModulator; std::vector<float> adversarial(target + 1000);
-        worstModulator.render(adversarial.data(), adversarial.size(), worst, 1);
-        float worstPeak = 0;
-        for (const float value : adversarial) worstPeak = std::max(worstPeak, std::abs(value));
-        require(worstPeak > .99f && worstPeak < 1.f, "100 percent does not reach full scale without clipping");
-        std::cout << "Adversarial full-scale peak " << worstPeak << "\n";
+        for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410}) {
+            std::size_t target = 0;
+            struct PeakSource : SymbolSource {
+                std::vector<unsigned> symbols; std::size_t index = 0;
+                unsigned next() override { return index < symbols.size() ? symbols[index++] : 0; }
+            } worst;
+            worst.symbols = peakSequence(target, mode);
+            TxModulator worstModulator(mode); std::vector<float> adversarial(target + 1000);
+            worstModulator.render(adversarial.data(), adversarial.size(), worst, 1);
+            float worstPeak = 0;
+            for (const float value : adversarial) worstPeak = std::max(worstPeak, std::abs(value));
+            require(worstPeak > .99f && worstPeak < 1.f, "100 percent does not reach full scale without clipping");
+            std::cout << modulationName(mode) << " adversarial full-scale peak " << worstPeak << "\n";
+        }
+        const auto qExpected = reference(5000, 123, Modulation::Qpsk4410);
+        TxModulator qMod(Modulation::Qpsk4410); RandomSymbols qSymbols(123, Modulation::Qpsk4410);
+        std::vector<float> qAudio(qExpected.size()); qMod.render(qAudio.data(), qAudio.size(), qSymbols, 1);
+        double qCross = 0, qEnergy = 0;
+        for (std::size_t i = 1000; i < qAudio.size(); ++i) { qCross += qAudio[i]*double(qExpected[i]); qEnergy += qExpected[i]*double(qExpected[i]); }
+        const float qGain = qCross/qEnergy; float qError = 0;
+        for (std::size_t i = 1000; i < qAudio.size(); ++i) qError = std::max(qError, std::abs(qAudio[i]-qExpected[i]*qGain));
+        require(qError < 1e-6f && qGain > 2 && qGain < 5, "Original QPSK waveform/Gray mapping mismatch");
+        struct QpskClock : SymbolSource { unsigned count = 0; unsigned next() override { return count++ & 3; } } qClock; TxModulator qClockMod(Modulation::Qpsk4410); std::vector<float> qSecond(44100);
+        qClockMod.render(qSecond.data(), qSecond.size(), qClock, 1);
+        require(qClock.count == 2205 && qClockMod.sampleRateHz() == 44100, "QPSK is not 4410 bit/s");
+        std::cout << "QPSK original waveform max error " << qError << "; full-scale gain " << qGain << "\n";
         std::array<unsigned, 8> histogram{}; RandomSymbols random(19);
         for (unsigned n = 0; n < 80000; ++n) ++histogram.at(random.next());
         for (auto count : histogram) require(count > 9500 && count < 10500, "Symbol distribution is unbalanced");

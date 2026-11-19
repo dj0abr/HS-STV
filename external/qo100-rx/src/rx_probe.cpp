@@ -15,9 +15,7 @@
 #include <string>
 
 int bitsPerSymbol = 3, constellationSize = 8, speed = mm_sstv::ModemMode::bitRate;
-constexpr unsigned preDecimation = mm_sstv::ModemMode::rxDecimation;
-constexpr double pllRate = mm_sstv::ModemMode::pllSampleRate;
-constexpr double rate = 48000.0;
+
 
 int main(int argc, char** argv) {
 #ifdef _WIN32
@@ -26,15 +24,22 @@ int main(int argc, char** argv) {
     double center = 1500;
     bool automatic = true, monitor_enabled = false;
     unsigned input_rate = 48000;
+    auto modulation = mm_sstv::Modulation::Apsk8;
     for (int i = 1; i < argc; ++i) {
         if (std::string(argv[i]) == "--manual") automatic = false;
         else if (std::string(argv[i]) == "--monitor") monitor_enabled = true;
+        else if (std::string(argv[i]) == "--modulation" && i+1 < argc) {
+            const std::string value = argv[++i];
+            if (value == "8apsk") modulation = mm_sstv::Modulation::Apsk8;
+            else if (value == "qpsk4410") modulation = mm_sstv::Modulation::Qpsk4410;
+            else { fprintf(stderr, "Modulation must be 8apsk or qpsk4410\n"); return 2; }
+        }
         else if (std::string(argv[i]) == "--input-rate" && i+1 < argc) {
             std::string value = argv[++i];
-            if(value != "12000" && value != "48000") {
-                fprintf(stderr, "Input rate must be 12000 or 48000\n"); return 2;
+            if(value != "12000" && value != "48000" && value != "44100") {
+                fprintf(stderr, "Input rate must be 12000, 44100 or 48000\n"); return 2;
             }
-            input_rate = value == "12000" ? 12000 : 48000;
+            input_rate = static_cast<unsigned>(std::stoul(value));
         }
         else if (std::string(argv[i]) == "--center-hz" && i+1 < argc) {
             char* end = nullptr;
@@ -44,12 +49,17 @@ int main(int argc, char** argv) {
                 fprintf(stderr, "Invalid center frequency\n"); return 2;
             }
         } else {
-            fprintf(stderr, "Usage: rx_probe [--manual] [--center-hz 1500] [--input-rate 48000|12000] [--monitor] < mono-float32le.raw\n");
+            fprintf(stderr, "Usage: rx_probe [--manual] [--center-hz 1500] [--input-rate 48000|44100|12000] [--monitor] [--modulation 8apsk|qpsk4410] < mono-float32le.raw\n");
             return 2;
         }
     }
-    PilotDetector detector;
-    auto monitor = monitor_enabled ? std::make_unique<mm_sstv::AudioSpectrum>() : nullptr;
+    const auto mode = mm_sstv::parameters(modulation);
+    bitsPerSymbol = mode.bitsPerSymbol; constellationSize = 1u << bitsPerSymbol; speed = mode.bitRate();
+    const auto preDecimation = mode.rxDecimation;
+    const double rate = mode.sampleRate, pllRate = mode.pllSampleRate();
+    const auto scheme = modulation == mm_sstv::Modulation::Apsk8 ? LIQUID_MODEM_APSK8 : LIQUID_MODEM_QPSK;
+    PilotDetector detector(mode.sampleRate);
+    auto monitor = monitor_enabled ? std::make_unique<mm_sstv::AudioSpectrum>(mode.sampleRate) : nullptr;
     double trial_start = -1, trial_hz = 0, previous_candidate = -1, lock_started = -1;
     int stable_estimates = 0;
     std::vector<std::pair<double,double>> rejected;
@@ -58,18 +68,18 @@ int main(int argc, char** argv) {
     nco_crcf_set_frequency(nco, 2 * M_PI * center / rate);
     auto decim = firdecim_crcf_create_kaiser(preDecimation, 8, 40);
     firdecim_crcf_set_scale(decim, 1.f/preDecimation);
-    auto tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC, mm_sstv::ModemMode::rxSamplesPerSymbol, 7, 0.2f, LIQUID_MODEM_APSK8);
+    auto tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC, mm_sstv::ModemMode::rxSamplesPerSymbol, 7, 0.2f, scheme);
     km_symtrack_cccf_set_bandwidth(tracker, 0.9f);
     uint64_t samples = 0, frames = 0, symbols = 0;
     int pending = 0;
-    liquid_float_complex group[preDecimation];
+    std::vector<liquid_float_complex> group(preDecimation);
     std::deque<uint64_t> recent_frames;
     std::vector<liquid_float_complex> points;
     double power = 0;
     float peak = 0;
     uint64_t last_frame = 0;
     bool was_silent = false;
-    auto resampler = input_rate == 12000 ? msresamp_rrrf_create(4.f,80.f) : nullptr;
+    auto resampler = input_rate != mode.sampleRate ? msresamp_rrrf_create(float(mode.sampleRate)/input_rate,80.f) : nullptr;
     const size_t block = input_rate/10;
     float input_buffer[4800], buffer[19264];
     while (true) {
@@ -92,7 +102,7 @@ int main(int argc, char** argv) {
         } else if (was_silent) {
             // Do not let the original AGC integrate exact zeros indefinitely.
             km_symtrack_cccf_destroy(tracker);
-            tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC, mm_sstv::ModemMode::rxSamplesPerSymbol, 7, 0.2f, LIQUID_MODEM_APSK8);
+            tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC, mm_sstv::ModemMode::rxSamplesPerSymbol, 7, 0.2f, scheme);
             was_silent = false;
         }
         for (size_t i = 0; !silent && i < count; ++i) {
@@ -107,7 +117,7 @@ int main(int argc, char** argv) {
             if (pending != preDecimation) continue;
             pending = 0;
             liquid_float_complex y, out[8];
-            firdecim_crcf_execute(decim, group, &y);
+            firdecim_crcf_execute(decim, group.data(), &y);
             unsigned int nout = 0, sym = 0;
             km_symtrack_execute(tracker, y, out, &nout, &sym);
             if (!nout) continue;
@@ -118,12 +128,13 @@ int main(int argc, char** argv) {
                 finite = finite && std::isfinite(out[j].real) && std::isfinite(out[j].imag);
             if (!finite) {
                 km_symtrack_cccf_destroy(tracker);
-                tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC, mm_sstv::ModemMode::rxSamplesPerSymbol, 7, 0.2f, LIQUID_MODEM_APSK8);
+                tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC, mm_sstv::ModemMode::rxSamplesPerSymbol, 7, 0.2f, scheme);
                 continue;
             }
             ++symbols;
             if (symbols % 4 == 0 && points.size() < 96) points.push_back(out[0]);
             uint8_t s = sym;
+            if (bitsPerSymbol == 2) s ^= s >> 1; // HS-Modem QPSK post-Gray conversion.
             uint8_t* pl = unpack_data(&s, 1);
             if (!pl) continue;
             ++frames;
@@ -136,7 +147,7 @@ int main(int argc, char** argv) {
             printf("\"}\n");
         }
         if (count) {
-            while (!recent_frames.empty() && samples - recent_frames.front() > 96000)
+            while (!recent_frames.empty() && samples - recent_frames.front() > 2 * mode.sampleRate)
                 recent_frames.pop_front();
             double age = frames ? (samples - last_frame) / rate : -1;
             // A header match is never enough to declare synchronization.
@@ -190,7 +201,7 @@ int main(int argc, char** argv) {
                         stable_estimates = 0;
                         nco_crcf_set_frequency(nco,2*M_PI*center/rate);
                         km_symtrack_cccf_destroy(tracker);
-                        tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC,mm_sstv::ModemMode::rxSamplesPerSymbol,7,0.2f,LIQUID_MODEM_APSK8);
+                        tracker = km_symtrack_cccf_create(LIQUID_FIRFILT_RRC,mm_sstv::ModemMode::rxSamplesPerSymbol,7,0.2f,scheme);
                         // Remove the old center's filter history after a jump.
                         firdecim_crcf_destroy(decim);
                         decim = firdecim_crcf_create_kaiser(preDecimation,8,40);
@@ -225,10 +236,10 @@ int main(int argc, char** argv) {
                    automatic ? "true" : "false",afc_state,center,center-1500,measured_pilot);
             for (size_t j = 0; j < points.size(); ++j)
                 printf("%s[%.4f,%.4f]", j ? "," : "", points[j].real, points[j].imag);
-            printf("]");
+            printf("],\"modulation\":\"%s\",\"bit_rate\":%d", bitsPerSymbol == 2 ? "qpsk4410" : "8apsk", speed);
             if (monitor) {
                 const auto spectrum = monitor->levels();
-                printf(",\"spectrum_bin_hz\":%.8f,\"spectrum_dbfs\":[", mm_sstv::AudioSpectrum::binHz);
+                printf(",\"spectrum_bin_hz\":%.8f,\"spectrum_dbfs\":[", monitor->frequencyStep());
                 for (size_t j = 0; j < spectrum.size(); ++j) printf("%s%.1f", j ? "," : "", spectrum[j]);
                 printf("]");
             }

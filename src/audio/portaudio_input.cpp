@@ -23,7 +23,7 @@ public:
         }
         return result;
     }
-    void start(const std::string& device, Consume consume) override {
+    void start(const std::string& device, Consume consume, unsigned sampleRate) override {
         stop(); { std::lock_guard<std::mutex> lock(mutex_); error_.clear(); }
         int found = -1; const auto count = Pa_GetDeviceCount(); check(count);
         for (int n = 0; n < count; ++n) {
@@ -35,12 +35,12 @@ public:
         }
         if (found < 0) throw std::runtime_error("Audio input unavailable: " + device);
         PaStreamParameters format{found, 1, paFloat32, .04, nullptr};
-        if (Pa_IsFormatSupported(&format, nullptr, 48000) != paFormatIsSupported) {
-            format.channelCount = 2; check(Pa_IsFormatSupported(&format, nullptr, 48000));
+        if (Pa_IsFormatSupported(&format, nullptr, sampleRate) != paFormatIsSupported) {
+            format.channelCount = 2; check(Pa_IsFormatSupported(&format, nullptr, sampleRate));
         }
         channels_ = format.channelCount; consume_ = std::move(consume);
         try {
-            check(Pa_OpenStream(&stream_, &format, nullptr, 48000, 480, paClipOff | paDitherOff, callback, this));
+            check(Pa_OpenStream(&stream_, &format, nullptr, sampleRate, sampleRate / 100, paClipOff | paDitherOff, callback, this));
             check(Pa_StartStream(stream_));
         } catch (...) { stop(); throw; }
     }

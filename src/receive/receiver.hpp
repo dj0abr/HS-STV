@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "mm_sstv/audio_input.hpp"
+#include "mm_sstv/modem_mode.hpp"
 #include "mm_sstv/image_assembler.hpp"
 #include <QByteArray>
 #include <QElapsedTimer>
@@ -13,6 +14,7 @@
 #include <mutex>
 namespace mm_sstv {
 struct ReceiveStatus {
+    Modulation modulation = Modulation::Apsk8;
     bool locked = false;
     double pilot = -1, offset = 0, level = -200;
     std::uint64_t frames = 0;
@@ -28,7 +30,7 @@ public:
     bool available() const { return bool(input_); }
     bool running() const { return active_; }
     std::vector<AudioDevice> devices();
-    void start(const std::string& device);
+    void start(const std::string& device, Modulation mode = Modulation::Apsk8);
     void stop();
     std::function<void(const ReceivedImage&)> imageReceived;
     std::function<void(const ReceiveStatus&)> statusChanged;
@@ -43,6 +45,7 @@ private:
     QElapsedTimer statusAge_;
     QByteArray lines_;
     ImageAssembler assembler_;
+    Modulation mode_ = Modulation::Apsk8;
     std::mutex mutex_;
     std::deque<std::vector<float>> queued_;
     std::size_t queuedSamples_ = 0;

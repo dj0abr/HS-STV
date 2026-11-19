@@ -8,10 +8,10 @@ namespace {
 constexpr std::array<std::uint8_t, 255> scramble = {
 #include "scrambler_table.inc"
 };
-unsigned symbolAt(const AirFrame& frame, std::size_t symbol) {
-    const auto bit = symbol * 3;
+unsigned symbolAt(const AirFrame& frame, std::size_t symbol, unsigned bits = 3) {
+    const auto bit = symbol * bits;
     unsigned value = 0;
-    for (unsigned n = 0; n < 3; ++n) value = (value << 1) | ((frame[(bit + n) / 8] >> (7 - (bit + n) % 8)) & 1);
+    for (unsigned n = 0; n < bits; ++n) value = (value << 1) | ((frame[(bit + n) / 8] >> (7 - (bit + n) % 8)) & 1);
     return value;
 }
 }
@@ -73,10 +73,11 @@ std::string jpegFileName(std::string input) {
     if (name.empty()) name = "image";
     return name + ".jpg";
 }
-ImageTransmission prepareImage(const std::vector<std::uint8_t>& jpeg, std::string filename) {
+ImageTransmission prepareImage(const std::vector<std::uint8_t>& jpeg, std::string filename, Modulation mode) {
+    parameters(mode);
     if (jpeg.empty() || jpeg.size() > ImageTransmission::maxJpegBytes)
         throw std::invalid_argument("JPEG must contain 1..200000 bytes");
-    ImageTransmission result;
+    ImageTransmission result; result.modulation = mode;
     result.filename = jpegFileName(std::move(filename)); result.jpegBytes = jpeg.size();
     result.fileId = crc16(jpeg.data(), jpeg.size());
     std::vector<std::uint8_t> content(55 + jpeg.size());
@@ -93,23 +94,23 @@ ImageTransmission prepareImage(const std::vector<std::uint8_t>& jpeg, std::strin
         std::copy_n(content.begin() + at, count, payload.begin());
         const unsigned status = result.fileFrames == 1 ? 3 : frame == 0 ? 0 : frame + 1 == result.fileFrames ? 2 : 1;
         const auto air = encoder.encode(payload, 2, status, frame);
-        // Original cold-start acquisition: first send plus 21 repeats (~7.6 s at 6000 bit/s).
+        // Original first send plus 21 repeats: ~7.6 s in 8APSK, ~10.3 s in QPSK4410.
         const unsigned copies = frame == 0 ? 22 : frame + 1 == result.fileFrames ? 6 : 1;
         for (unsigned copy = 0; copy < copies; ++copy) result.frames.push_back(air);
     }
     return result;
 }
 unsigned FrameSymbols::next() {
-    if (symbol_ >= frames_.size() * 688) return 0; // RRC tail; center symbols, no more frames.
+    if (symbol_ >= frames_.size() * mode_.frameSymbols()) return SymbolSource::silence; // Flush the RRC with actual zero baseband.
     const auto at = symbol_++;
-    return symbolAt(frames_[at / 688], at % 688);
+    return symbolAt(frames_[at / mode_.frameSymbols()], at % mode_.frameSymbols(), mode_.bitsPerSymbol);
 }
 unsigned BerSymbols::next() {
-    if (symbol_ == 688) {
+    if (symbol_ == mode_.frameSymbols()) {
         Payload payload{}; unsigned character = 'A';
         for (auto& value : payload) { value = character++; if (character == 'z') character = 'A'; }
         frame_ = encoder_.encode(payload, 1, counter_ == 0 ? 0 : 1, counter_); counter_ = (counter_ + 1) % 1024; symbol_ = 0;
     }
-    return symbolAt(frame_, symbol_++);
+    return symbolAt(frame_, symbol_++, mode_.bitsPerSymbol);
 }
 }

@@ -18,8 +18,9 @@ Receiver::Receiver(std::unique_ptr<AudioInput> input, QObject* parent) : QObject
 }
 Receiver::~Receiver() { stop(); }
 std::vector<AudioDevice> Receiver::devices() { return input_ ? input_->devices() : std::vector<AudioDevice>{}; }
-void Receiver::start(const std::string& device) {
+void Receiver::start(const std::string& device, Modulation mode) {
     stop();
+    const auto sampleRate = parameters(mode).sampleRate; mode_ = mode;
     if (!input_) throw std::runtime_error("Kein Audioeingang vorhanden");
     if (device.empty()) throw std::runtime_error("Kein Audioeingang gewählt");
 #ifdef Q_OS_WIN
@@ -28,18 +29,18 @@ void Receiver::start(const std::string& device) {
     const QString executable = QCoreApplication::applicationDirPath() + "/mm-sstv-rx-core";
 #endif
     if (!QFileInfo(executable).isExecutable()) throw std::runtime_error("Empfangskern mm-sstv-rx-core fehlt. Bitte neu bauen.");
-    lines_.clear(); core_.start(executable, {"--input-rate", "48000", "--monitor"});
+    lines_.clear(); core_.start(executable, {"--input-rate", QString::number(sampleRate), "--monitor", "--modulation", mode_ == Modulation::Apsk8 ? "8apsk" : "qpsk4410"});
     if (!core_.waitForStarted(1000)) throw std::runtime_error(core_.errorString().toStdString());
     accepting_ = true; active_ = true; stale_ = false; statusAge_.start();
     try {
-        input_->start(device, [this](const float* data, std::size_t count) {
+        input_->start(device, [this, limit = sampleRate * 2](const float* data, std::size_t count) {
             if (!accepting_) return;
             std::lock_guard<std::mutex> lock(mutex_);
-            if (count > 96000 || queuedSamples_ + count > 96000) { overflow_ = true; return; }
+            if (count > limit || queuedSamples_ + count > limit) { overflow_ = true; return; }
             queued_.emplace_back(data, data + count); queuedSamples_ += count;
-        });
+        }, sampleRate);
         timer_.start();
-        if (statusChanged) { ReceiveStatus status; status.state = "Suche"; statusChanged(status); }
+        if (statusChanged) { ReceiveStatus status; status.modulation = mode_; status.state = "Suche"; statusChanged(status); }
     } catch (...) { stop(); throw; }
 }
 void Receiver::stop() {
@@ -68,7 +69,7 @@ void Receiver::pump() {
     }
     if (!stale_ && statusAge_.elapsed() > 2000) {
         stale_ = true;
-        if (statusChanged) { ReceiveStatus status; status.state = "Keine aktuellen Audiodaten"; statusChanged(status); }
+        if (statusChanged) { ReceiveStatus status; status.modulation = mode_; status.state = "Keine aktuellen Audiodaten"; statusChanged(status); }
     }
 }
 void Receiver::readOutput() {
@@ -82,7 +83,7 @@ void Receiver::readOutput() {
         const auto event = json.value("event").toString();
         if (event == "status") {
             statusAge_.restart(); stale_ = false;
-            ReceiveStatus status; status.locked = json.value("locked").toBool();
+            ReceiveStatus status; status.modulation = mode_; status.locked = json.value("locked").toBool();
             status.pilot = json.value("pilot_hz").toDouble(-1); status.offset = json.value("frequency_offset_hz").toDouble();
             status.level = json.value("rms_dbfs").toDouble(-200); status.frames = json.value("valid_frames").toDouble();
             status.center = json.value("center_hz").toDouble(1500);

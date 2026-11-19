@@ -2,12 +2,14 @@
 #include "pilot_afc.h"
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 constexpr size_t PilotDetector::nfft;
 constexpr size_t PilotDetector::capacity;
 
-PilotDetector::PilotDetector()
-    : ring(capacity), window(nfft), input(nfft), output(nfft) {
+PilotDetector::PilotDetector(unsigned sampleRate)
+    : ring(capacity), window(nfft), input(nfft), output(nfft), sampleRate_(sampleRate) {
+    if (sampleRate != 44100 && sampleRate != 48000) throw std::invalid_argument("Unsupported pilot sample rate");
     for (size_t i = 0; i < nfft; ++i)
         window[i] = 0.5 - 0.5 * cos(2*M_PI*i/(nfft-1));
     plan = fft_create_plan(nfft, input.data(), output.data(), LIQUID_FFT_FORWARD, 0);
@@ -22,7 +24,7 @@ bool PilotDetector::push(const float* data, size_t count) {
     }
     available = std::min(capacity, available + count);
     since_scan += count;
-    if (available < capacity || since_scan < 24000) return false;
+    if (available < capacity || since_scan < sampleRate_/2) return false;
     since_scan = 0;
     analyze();
     return true;
@@ -30,7 +32,7 @@ bool PilotDetector::push(const float* data, size_t count) {
 
 void PilotDetector::analyze() {
     // Three overlapping spectra suppress transient peaks in the data signal.
-    const size_t bins = size_t((max_hz+40)*nfft/48000)+2;
+    const size_t bins = size_t((max_hz+40)*nfft/sampleRate_)+2;
     std::vector<double> power(bins, 0);
     for (size_t start = 0; start <= capacity-nfft; start += nfft/2) {
         for (size_t i = 0; i < nfft; ++i) {
@@ -43,7 +45,7 @@ void PilotDetector::analyze() {
     }
     found.clear();
     for (size_t i = 1; i+1 < bins; ++i) {
-        double hz = i * 48000.0/nfft;
+        double hz = i * double(sampleRate_)/nfft;
         if (hz < min_hz || hz > max_hz || power[i] <= power[i-1] || power[i] <= power[i+1]) continue;
         std::vector<double> background;
         for (int j = int(i)-17; j <= int(i)+17; ++j)
@@ -59,7 +61,7 @@ void PilotDetector::analyze() {
         double c = log(std::max(power[i+1],1e-30));
         double denominator = a-2*b+c;
         double delta = denominator ? 0.5*(a-c)/denominator : 0;
-        hz = (i + std::max(-0.5,std::min(0.5,delta))) * 48000.0/nfft;
+        hz = (i + std::max(-0.5,std::min(0.5,delta))) * double(sampleRate_)/nfft;
         if (hz >= min_hz && hz <= max_hz) found.push_back({hz, prominence});
     }
     std::sort(found.begin(), found.end(), [](const PilotCandidate& a,const PilotCandidate& b) {

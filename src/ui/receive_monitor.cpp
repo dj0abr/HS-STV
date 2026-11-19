@@ -14,14 +14,14 @@ constexpr double maxHz = 4000, minDb = -140;
 ReceiveMonitor::ReceiveMonitor(QWidget* parent) : QWidget(parent) {
     setObjectName("receiveMonitor"); setMinimumSize(300, 96); setMaximumHeight(144);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    setToolTip("Empfangsaudio vor AFC und AGC · 0–4000 Hz\nGrün: erkannter Pilot · Fläche: Pilotsuche 20–900 Hz\nGelb: Datenband der aktuellen Empfangsmitte\n8APSK: tatsächlich empfangene I/Q-Symbole nach dem Symboltracking");
+    setToolTip("Empfangsaudio vor AFC und AGC · 0–4000 Hz\nGrün: erkannter Pilot · Fläche: Pilotsuche 20–900 Hz\nGelb: Datenband der aktuellen Empfangsmitte\nKonstellation: tatsächlich empfangene I/Q-Symbole nach dem Symboltracking");
     clear();
 }
-void ReceiveMonitor::clear(const QString& message) {
-    status_ = {}; status_.state = message; points_.clear(); update();
+void ReceiveMonitor::clear(const QString& message, Modulation mode) {
+    status_ = {}; status_.modulation = mode; status_.state = message; points_.clear(); update();
 }
 void ReceiveMonitor::setStatus(const ReceiveStatus& status) {
-    if (status.locked != status_.locked || std::abs(status.center - status_.center) > 20 || status.points.empty()) points_.clear();
+    if (status.modulation != status_.modulation || status.locked != status_.locked || std::abs(status.center - status_.center) > 20 || status.points.empty()) points_.clear();
     status_ = status;
     for (const auto& point : status.points) points_.emplace_back(point[0], point[1]);
     while (points_.size() > 600) points_.pop_front();
@@ -38,7 +38,7 @@ void ReceiveMonitor::paintEvent(QPaintEvent*) {
     p.setPen(label); p.drawText(QRectF(8, 4, spectrum.right() - 8, 20), Qt::AlignLeft | Qt::AlignVCenter, "Empfangsaudio · dBFS/Bin");
     if (!status_.spectrum.empty())
         p.drawText(QRectF(8, 4, spectrum.right() - 8, 20), Qt::AlignRight | Qt::AlignVCenter, QString("%1 dBFS").arg(status_.level, 0, 'f', 1));
-    p.drawText(QRectF(constellation.left() + 4, 4, constellation.width(), 20), Qt::AlignLeft | Qt::AlignVCenter, "8APSK");
+    p.drawText(QRectF(constellation.left() + 4, 4, constellation.width(), 20), Qt::AlignLeft | Qt::AlignVCenter, QString::fromLatin1(modulationName(status_.modulation)));
     p.fillRect(QRectF(x(20), spectrum.top(), x(900) - x(20), spectrum.height()), QColor(20, 49, 49));
     for (int db = 0, step = spectrum.height() < 70 ? 60 : 40; db >= -120; db -= step) {
         p.setPen(grid); p.drawLine(QPointF(spectrum.left(), y(db)), QPointF(spectrum.right(), y(db)));
@@ -65,7 +65,7 @@ void ReceiveMonitor::paintEvent(QPaintEvent*) {
         }
         append(); p.setPen(QPen(trace, 1)); p.drawPolyline(line);
         p.setPen(QPen(band, 1, Qt::DashLine));
-        for (const auto edge : {status_.center - ModemMode::halfBandwidthHz, status_.center + ModemMode::halfBandwidthHz})
+        for (const auto edge : {status_.center - parameters(status_.modulation).halfBandwidthHz(), status_.center + parameters(status_.modulation).halfBandwidthHz()})
             p.drawLine(QPointF(x(edge), spectrum.top()), QPointF(x(edge), spectrum.bottom()));
     }
     if (status_.pilot >= 0 && status_.pilot <= maxHz) {

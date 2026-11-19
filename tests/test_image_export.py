@@ -27,17 +27,19 @@ def png(path):
 
 with tempfile.TemporaryDirectory(prefix='mm-sstv-image-') as folder:
     root = Path(folder); source = root/'test-image.png'; png(source); output = root/'image.wav'
-    subprocess.run([sys.argv[1], str(source), str(output), '640', '480', '100'], check=True)
+    mode = sys.argv[3] if len(sys.argv) > 3 else '8apsk'
+    rate = 44100 if mode == 'qpsk4410' else 48000
+    subprocess.run([sys.argv[1], str(source), str(output), '640', '480', '100'] + ([mode] if mode == 'qpsk4410' else []), check=True)
     jpeg = Path(str(output)+'.jpg').read_bytes()
     assert jpeg.startswith(b'\xff\xd8') and jpeg.endswith(b'\xff\xd9') and len(jpeg) <= 200000
     with wave.open(str(output)) as wav:
-        assert (wav.getframerate(), wav.getnchannels(), wav.getsampwidth()) == (48000, 1, 2)
+        assert (wav.getframerate(), wav.getnchannels(), wav.getsampwidth()) == (rate, 1, 2)
         samples = np.frombuffer(wav.readframes(wav.getnframes()), dtype='<i2').astype('<f4') / 32768
-    assert len(samples) > 48000*6 and np.max(abs(samples)) < 1
+    assert len(samples) > rate*6 and np.max(abs(samples)) < 1
     assert abs(samples[-1]) < .0001, 'End of audio is not faded to zero'
-    if len(sys.argv) == 3:
+    if len(sys.argv) >= 3:
         for auto in (False, True):
-            args = [sys.argv[2]] + ([] if auto else ['--manual'])
+            args = [sys.argv[2]] + ([] if auto else ['--manual']) + (['--modulation', mode, '--input-rate', str(rate)] if mode == 'qpsk4410' else [])
             # Simulate the +81-Hz offset observed in the station for AFC testing.
             audio = samples
             if auto:
@@ -46,7 +48,7 @@ with tempfile.TemporaryDirectory(prefix='mm-sstv-image-') as folder:
                 spectrum[1:len(samples)//2] *= 2
                 spectrum[len(samples)//2+1:] = 0
                 analytic = np.fft.ifft(spectrum)
-                audio = np.real(analytic * np.exp(2j*np.pi*81*np.arange(len(samples))/48000)).astype('<f4')
+                audio = np.real(analytic * np.exp(2j*np.pi*81*np.arange(len(samples))/rate)).astype('<f4')
             result = subprocess.run(args, input=audio.astype('<f4').tobytes(), capture_output=True, check=True, timeout=20)
             events = [json.loads(line) for line in result.stdout.splitlines()]
             assert any(e.get('locked') for e in events), 'No valid-frame lock'
@@ -61,4 +63,4 @@ with tempfile.TemporaryDirectory(prefix='mm-sstv-image-') as folder:
             assert content == jpeg, 'Original RX recovered a different JPEG'
             assert int.from_bytes(header[50:52], 'big') == crc16(content)
             print(f'Original RX ({"AFC +81 Hz" if auto else "manual"}): locked; {count} image frames; {len(content)} JPEG bytes identical')
-    print(f'JPEG and finite WAV export passed: {len(jpeg)} bytes, {len(samples)/48000:.3f} seconds')
+    print(f'JPEG and finite WAV export passed: {len(jpeg)} bytes, {len(samples)/rate:.3f} seconds')

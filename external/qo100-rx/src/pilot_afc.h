@@ -13,7 +13,7 @@ struct PilotCandidate {
 class PilotDetector {
 public:
     static constexpr double min_hz = 20, max_hz = 900;
-    PilotDetector();
+    explicit PilotDetector(unsigned sampleRate = 48000);
     ~PilotDetector();
     PilotDetector(const PilotDetector&) = delete;
     PilotDetector& operator=(const PilotDetector&) = delete;
@@ -25,6 +25,7 @@ private:
     std::vector<liquid_float_complex> input, output;
     std::vector<PilotCandidate> found;
     fftplan plan;
+    unsigned sampleRate_;
     size_t position = 0, available = 0, since_scan = 0;
     void analyze();
 };

@@ -8,6 +8,7 @@ public:
     explicit ImageAudio(ImageTransmission transmission);
     std::size_t render(float* output, std::size_t capacity, float gain);
     unsigned progress() const;
+    unsigned sampleRateHz() const { return parameters(transmission_.modulation).sampleRate; }
     std::size_t frames() const { return transmission_.audioFrames(); }
 private:
     ImageTransmission transmission_;

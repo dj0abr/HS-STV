@@ -108,9 +108,11 @@
     }
   ],
   "local_changes": {
-    "src/rx_probe.cpp": "Windows binary stdin; pilot_hz display; optional independent monitor FFT; HS-Modem 6000-bit/s mode with RX predecimation 6 and PLL-rate conversion 4000 Hz. Pilot acquisition and frame decoding algorithms unchanged.",
-    "tests/generate_fixture.cpp": "Windows binary stdout; independent waveform generator configured for HS-Modem 6000 bit/s (24 samples/symbol, 721 RRC taps).",
+    "src/rx_probe.cpp": "Windows binary stdin; pilot_hz and optional monitor FFT; optional HS-Modem QPSK4410 with native 44100 Hz, predecimation 5, 4410-Hz PLL-rate conversion and original QPSK post-Gray mapping. Default remains 8APSK6000. Non-native input is continuously resampled.",
+    "tests/generate_fixture.cpp": "Windows binary stdout; default 8APSK6000 fixture and optional independent native HS-Modem QPSK4410 generator with pre-Gray mapping and configurable carrier phase.",
     "tests/test_rx.py": "Imports the isolated spectrum test helper instead of rx_monitor.",
-    "rx_spectrum.py": "Only the original pure spectrum() function, extracted from rx_monitor.py."
+    "rx_spectrum.py": "Only the original pure spectrum() function, extracted from rx_monitor.py.",
+    "src/pilot_afc.cpp": "Original algorithm; explicit native sample-rate calibration supports 48000 and 44100 Hz.",
+    "src/pilot_afc.h": "Constructor accepts native sample rate, default 48000 Hz."
   }
 }

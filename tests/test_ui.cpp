@@ -25,16 +25,16 @@ struct State {
     std::vector<AudioDevice> devices{{"other", "Other output"}, {"toQO100", "toQO100"}};
     std::string chosen, error;
     bool open = false, failStart = false, complete = false;
-    unsigned starts = 0;
+    unsigned starts = 0, sampleRate = 48000;
     AudioOutput::Render render;
 };
 class FakeOutput final : public AudioOutput {
 public:
     explicit FakeOutput(State& state) : state_(state) {}
     std::vector<AudioDevice> devices() override { return state_.devices; }
-    void start(const std::string& device, Render render) override {
+    void start(const std::string& device, Render render, unsigned sampleRate) override {
         if (state_.failStart) throw std::runtime_error("Device unplugged");
-        state_.chosen = device; state_.open = true; state_.complete = false; state_.error.clear(); ++state_.starts;
+        state_.sampleRate = sampleRate; state_.chosen = device; state_.open = true; state_.complete = false; state_.error.clear(); ++state_.starts;
         state_.render = std::move(render); std::array<float, 513> audio{}; state_.render(audio.data(), audio.size());
     }
     void stop() noexcept override { state_.open = false; state_.render = {}; }
@@ -44,13 +44,13 @@ public:
 private:
     State& state_;
 };
-struct CaptureState { bool open = false, failStart = false; unsigned starts = 0; AudioInput::Consume consume; std::string chosen, error; };
+struct CaptureState { bool open = false, failStart = false; unsigned starts = 0, sampleRate = 48000; AudioInput::Consume consume; std::string chosen, error; };
 class FakeCapture final : public AudioInput {
 public:
     explicit FakeCapture(CaptureState& state) : state_(state) {}
     std::vector<AudioDevice> devices() override { return {{"fromQO100", "fromQO100"}, {"other-input", "Other input"}}; }
-    void start(const std::string& device, Consume consume) override {
-        ++state_.starts; if (state_.failStart) throw std::runtime_error("Input disconnected");
+    void start(const std::string& device, Consume consume, unsigned sampleRate) override {
+        state_.sampleRate = sampleRate; ++state_.starts; if (state_.failStart) throw std::runtime_error("Input disconnected");
         state_.error.clear(); state_.open = true; state_.chosen = device; state_.consume = std::move(consume);
     }
     void stop() noexcept override { state_.open = false; state_.consume = {}; }
@@ -72,7 +72,7 @@ private slots:
             MainWindow window(std::make_unique<FakeOutput>(state), settings); window.show();
             auto* button = window.findChild<QPushButton*>("transmitButton"); QVERIFY(button); QVERIFY(!button->isEnabled());
             QVERIFY(window.loadImage(picture(dir))); QVERIFY(button->isEnabled());
-            QVERIFY(window.findChild<QLabel*>("modulationInfo")->text().contains("6000 bit/s"));
+            QVERIFY(window.findChild<QComboBox*>("modulation")->currentText().contains("6000 bit/s"));
             QTest::qWait(50);
             const auto screenshot = qEnvironmentVariable("MM_SSTV_SCREENSHOT", dir.filePath("window.png")); QVERIFY(window.grab().save(screenshot));
             QTest::mouseClick(button, Qt::LeftButton); QCOMPARE(state.chosen, std::string("toQO100"));
@@ -186,6 +186,28 @@ private slots:
             QVERIFY(capture.open); QCOMPARE(capture.chosen, std::string("other-input"));
         }
         QVERIFY(!capture.open);
+    }
+    void qpskSelectionAndNativeRateRoundTrip() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state; CaptureState capture;
+        MainWindow window(std::make_unique<FakeOutput>(state), settings, std::make_unique<FakeCapture>(capture)); window.show();
+        QTRY_VERIFY(capture.open); QVERIFY(window.loadImage(picture(dir)));
+        auto* modes = window.findChild<QComboBox*>("modulation"); QVERIFY(modes); QCOMPARE(modes->currentIndex(), 0);
+        modes->setCurrentIndex(1); QCOMPARE(capture.sampleRate, 44100u); QVERIFY(capture.open);
+        QCOMPARE(settings.value("modem/modulation").toString(), QString("qpsk4410"));
+        auto* send = window.findChild<QPushButton*>("transmitButton"); send->click();
+        QCOMPARE(state.sampleRate, 44100u); QVERIFY(!modes->isEnabled());
+        std::array<float, 4410> buffer{};
+        while (const auto count = state.render(buffer.data(), buffer.size())) { capture.consume(buffer.data(), count); QTest::qWait(2); }
+        state.complete = true;
+        QTRY_COMPARE_WITH_TIMEOUT(window.findChild<QProgressBar*>("receiveProgress")->value(), 100, 5000);
+        QTRY_COMPARE(send->text(), QString("Senden")); QVERIFY(modes->isEnabled()); QVERIFY(capture.open);
+        QVERIFY(window.findChild<QAction*>("saveReceived")->isEnabled());
+        if (qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT")) {
+            window.resize(640, 440); QTest::qWait(30);
+            QVERIFY(window.grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + ".qpsk.png"));
+        }
+        modes->setCurrentIndex(0); QCOMPARE(capture.sampleRate, 48000u); QVERIFY(capture.open);
+        QCOMPARE(settings.value("modem/modulation").toString(), QString("8apsk"));
     }
     void receiveRetriesAfterInputFailure() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state; CaptureState capture;

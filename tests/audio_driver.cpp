@@ -17,11 +17,12 @@ int main(int argc, char** argv) {
             for (const auto& d : tx.audio().devices()) std::cout << d.id << '\n';
             return 0;
         }
-        if (argc == 5 && std::string(argv[1]) == "capture") {
+        if ((argc == 5 || argc == 6) && std::string(argv[1]) == "capture") {
+            const unsigned sampleRate = argc == 6 ? std::stoul(argv[5]) : 48000;
             auto input = makeAudioInput(); std::vector<float> captured; std::mutex guard;
             input->start(argv[2], [&](const float* data, std::size_t size) {
                 std::lock_guard<std::mutex> lock(guard); captured.insert(captured.end(), data, data + size);
-            });
+            }, sampleRate);
             std::cout << "capturing\n" << std::flush;
             const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(std::stoi(argv[3]));
             while (std::chrono::steady_clock::now() < deadline) {
@@ -34,13 +35,14 @@ int main(int argc, char** argv) {
         }
         if (argc != 4) return 2;
         const auto duration = std::chrono::milliseconds(std::stoi(argv[3]));
-        if (std::string(argv[1]) == "finite") {
-            std::size_t at = 0; const std::size_t total = duration.count() * 48;
+        if (std::string(argv[1]) == "finite" || std::string(argv[1]) == "finite44100") {
+            const unsigned sampleRate = std::string(argv[1]) == "finite44100" ? 44100 : 48000;
+            std::size_t at = 0; const std::size_t total = duration.count() * sampleRate / 1000;
             tx.audio().start(argv[2], [&](float* output, std::size_t capacity) {
                 const auto count = std::min(capacity, total - at);
-                for (std::size_t n = 0; n < count; ++n) output[n] = at + n + 480 >= total ? .375f : .125f;
+                for (std::size_t n = 0; n < count; ++n) output[n] = at + n + sampleRate/100 >= total ? .375f : .125f;
                 at += count; return count;
-            });
+            }, sampleRate);
             const auto deadline = std::chrono::steady_clock::now() + duration + std::chrono::seconds(3);
             while (!tx.audio().finished() && std::chrono::steady_clock::now() < deadline) {
                 if (!tx.audio().error().empty()) throw std::runtime_error(tx.audio().error());

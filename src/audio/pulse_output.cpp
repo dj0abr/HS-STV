@@ -20,7 +20,7 @@ class PulseOutput final : public AudioOutput {
 public:
     ~PulseOutput() override { stop(); }
     std::vector<AudioDevice> devices() override { Connection c; return c.devices(); }
-    void start(const std::string& device, Render render) override {
+    void start(const std::string& device, Render render, unsigned sampleRate) override {
         stop();
         { std::lock_guard<std::mutex> lock(errorMutex_); error_.clear(); }
         underruns_ = 0; finished_ = false; ending_ = false; stopping_ = false; render_ = std::move(render);
@@ -29,9 +29,8 @@ public:
             const auto available = connection_->devices();
             if (std::none_of(available.begin(), available.end(), [&](const auto& d) { return d.id == device; }))
                 throw std::runtime_error("Audioausgang nicht verfügbar: " + device);
-            const pa_sample_spec format{PA_SAMPLE_FLOAT32NE, TxModulator::sampleRate, 1};
-            const auto streamName = "8APSK " + std::to_string(TxModulator::bitRate) + " bit/s + " +
-                std::to_string(TxModulator::pilotHz) + " Hz";
+            const pa_sample_spec format{PA_SAMPLE_FLOAT32NE, sampleRate, 1};
+            const std::string streamName = "mm-sstv Bildsendung";
             stream_ = pa_stream_new(connection_->context, streamName.c_str(), &format, nullptr);
             if (!stream_) connection_->fail();
             pa_stream_set_write_callback(stream_, write, this);
@@ -41,7 +40,7 @@ public:
             }, this);
             // Bounded 50-ms stream buffer, requested target 40 ms. The server
             // may negotiate hardware latency separately; never drain on STOP.
-            const pa_buffer_attr buffer{9600, 7680, 3840, 1920, UINT32_MAX};
+            const pa_buffer_attr buffer{sampleRate / 5, sampleRate * 4 / 25, sampleRate * 2 / 25, sampleRate / 25, UINT32_MAX};
             pa_cvolume volume; pa_cvolume_set(&volume, 1, PA_VOLUME_NORM);
             const auto flags = static_cast<pa_stream_flags_t>(PA_STREAM_ADJUST_LATENCY |
                 PA_STREAM_DONT_MOVE | PA_STREAM_START_CORKED);

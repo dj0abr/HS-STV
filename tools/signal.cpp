@@ -16,8 +16,8 @@ void word(std::ostream& out, std::uint32_t value, unsigned bytes) {
 }
 int main(int argc, char** argv) {
     try {
-        if (argc < 2 || argc > 5) {
-            std::cerr << "Usage: mm-sstv-signal OUTPUT.wav [SECONDS=10] [LEVEL_PERCENT=35] [SEED=1]\n"; return 2;
+        if (argc < 2 || argc > 6) {
+            std::cerr << "Usage: mm-sstv-signal OUTPUT.wav [SECONDS=10] [LEVEL_PERCENT=35] [SEED=1] [8apsk|qpsk4410]\n"; return 2;
         }
         const auto number = [](const char* s) {
             std::size_t end; auto result = std::stod(s, &end);
@@ -29,13 +29,20 @@ int main(int argc, char** argv) {
         const double seed = argc > 4 ? number(argv[4]) : 1;
         if (seconds <= 0 || seconds > 3600 || level < 0 || level > 100 || seed < 0 || seed > UINT32_MAX || seed != std::floor(seed))
             throw std::invalid_argument("Duration 0..3600 s, level 0..100 %, integer seed 0..4294967295 required");
-        const auto frames = static_cast<std::uint32_t>(seconds * mm_sstv::TxModulator::sampleRate);
+        auto mode = mm_sstv::Modulation::Apsk8;
+        if (argc == 6) {
+            const std::string value(argv[5]);
+            if (value == "qpsk4410") mode = mm_sstv::Modulation::Qpsk4410;
+            else if (value != "8apsk") throw std::invalid_argument("Modulation must be 8apsk or qpsk4410");
+        }
+        const auto sampleRate = mm_sstv::parameters(mode).sampleRate;
+        const auto frames = static_cast<std::uint32_t>(seconds * sampleRate);
         if (!frames) throw std::invalid_argument("Duration too short");
         std::ofstream out(argv[1], std::ios::binary); out.exceptions(std::ios::badbit | std::ios::failbit);
         out.write("RIFF", 4); word(out, 36 + frames * 2, 4); out.write("WAVEfmt ", 8);
-        word(out, 16, 4); word(out, 1, 2); word(out, 1, 2); word(out, 48000, 4); word(out, 96000, 4);
+        word(out, 16, 4); word(out, 1, 2); word(out, 1, 2); word(out, sampleRate, 4); word(out, sampleRate * 2, 4);
         word(out, 2, 2); word(out, 16, 2); out.write("data", 4); word(out, frames * 2, 4);
-        mm_sstv::TxModulator modulator; mm_sstv::RandomSymbols random(static_cast<std::uint32_t>(seed));
+        mm_sstv::TxModulator modulator(mode); mm_sstv::RandomSymbols random(static_cast<std::uint32_t>(seed), mode);
         std::array<float, 960> buffer{};
         for (std::uint32_t at = 0; at < frames;) {
             const auto n = std::min<std::size_t>(buffer.size(), frames - at);

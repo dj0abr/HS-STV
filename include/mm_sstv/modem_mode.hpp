@@ -1,18 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include <stdexcept>
 namespace mm_sstv {
-// HS-Modem's 48-kHz / 6000-bit/s 8APSK mode. Shared by TX, RX and display.
+enum class Modulation { Apsk8 = 8, Qpsk4410 = 4 };
+struct ModeParameters {
+    unsigned sampleRate, bitsPerSymbol, txSamplesPerSymbol, rxDecimation;
+    constexpr unsigned symbolRate() const { return sampleRate / txSamplesPerSymbol; }
+    constexpr unsigned bitRate() const { return symbolRate() * bitsPerSymbol; }
+    constexpr unsigned frameSymbols() const { return 258 * 8 / bitsPerSymbol; }
+    constexpr double halfBandwidthHz() const { return symbolRate() * 1.2 / 2; }
+    constexpr double pllSampleRate() const { return 2 * symbolRate(); }
+};
+constexpr ModeParameters parameters(Modulation mode) {
+    return mode == Modulation::Apsk8 ? ModeParameters{48000, 3, 24, 6} :
+           mode == Modulation::Qpsk4410 ? ModeParameters{44100, 2, 20, 5} :
+           throw std::invalid_argument("Unsupported modulation");
+}
+constexpr const char* modulationName(Modulation mode) { return parameters(mode).bitsPerSymbol == 3 ? "8APSK" : "QPSK"; }
+// Backwards-compatible default parameters; selected modes use parameters(mode).
 struct ModemMode {
-    static constexpr unsigned sampleRate = 48000;
-    static constexpr unsigned bitsPerSymbol = 3;
-    static constexpr unsigned symbolRate = 2000;
-    static constexpr unsigned bitRate = symbolRate * bitsPerSymbol;
-    static constexpr unsigned txSamplesPerSymbol = sampleRate / symbolRate;
-    static constexpr unsigned rxSamplesPerSymbol = 4;
-    static constexpr unsigned rxDecimation = txSamplesPerSymbol / rxSamplesPerSymbol;
-    static constexpr double pllSampleRate = 2 * symbolRate;
-    static constexpr double halfBandwidthHz = symbolRate * 1.2 / 2;
-    static_assert(sampleRate % symbolRate == 0 && txSamplesPerSymbol % rxSamplesPerSymbol == 0,
-                  "Modem mode requires integer TX interpolation and RX decimation");
+    static constexpr unsigned sampleRate = 48000, bitsPerSymbol = 3, symbolRate = 2000, bitRate = 6000;
+    static constexpr unsigned txSamplesPerSymbol = 24, rxSamplesPerSymbol = 4, rxDecimation = 6;
+    static constexpr double pllSampleRate = 4000, halfBandwidthHz = 1200;
 };
 }

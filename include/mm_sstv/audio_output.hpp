@@ -15,9 +15,9 @@ public:
     virtual ~AudioOutput() = default;
     virtual std::vector<AudioDevice> devices() = 0;
     // Exact device ID, never an implicit fallback to a different sound card.
-    // Render runs serially on the audio thread, mono float at 48 kHz.
+    // Render runs serially on the audio thread, mono float at the requested sample rate.
     // Return 0..capacity frames. A short block ends input and drains playback.
-    virtual void start(const std::string& device, Render render) = 0;
+    virtual void start(const std::string& device, Render render, unsigned sampleRate = 48000) = 0;
     // Joins audio callbacks and discards queued samples. Safe if already stopped.
     virtual void stop() noexcept = 0;
     virtual bool finished() const { return false; } // True after final samples played.

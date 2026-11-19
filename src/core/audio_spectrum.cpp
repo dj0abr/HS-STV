@@ -9,9 +9,11 @@ struct AudioSpectrum::Impl {
     std::vector<float> ring = std::vector<float>(fftSize), window = std::vector<float>(fftSize);
     std::vector<liquid_float_complex> input = std::vector<liquid_float_complex>(fftSize), output = std::vector<liquid_float_complex>(fftSize);
     std::size_t position = 0, available = 0;
-    double windowSum = 0;
+    double windowSum = 0, frequencyStep = binHz;
     fftplan plan = nullptr;
-    Impl() {
+    explicit Impl(unsigned sampleRate) {
+        if (sampleRate != 48000 && sampleRate != 44100) throw std::invalid_argument("Unsupported monitor sample rate");
+        frequencyStep = double(sampleRate) / fftSize;
         const auto pi = std::acos(-1.0);
         for (std::size_t i = 0; i < fftSize; ++i) {
             window[i] = float(.5 - .5 * std::cos(2 * pi * i / (fftSize - 1)));
@@ -22,7 +24,8 @@ struct AudioSpectrum::Impl {
     }
     ~Impl() { if (plan) fft_destroy_plan(plan); }
 };
-AudioSpectrum::AudioSpectrum() : impl_(std::make_unique<Impl>()) {}
+AudioSpectrum::AudioSpectrum(unsigned sampleRate) : impl_(std::make_unique<Impl>(sampleRate)) {}
+double AudioSpectrum::frequencyStep() const { return impl_->frequencyStep; }
 AudioSpectrum::~AudioSpectrum() = default;
 void AudioSpectrum::push(const float* samples, std::size_t count) {
     auto& s = *impl_;
@@ -40,7 +43,7 @@ std::vector<float> AudioSpectrum::levels() {
         s.input[i].imag = 0;
     }
     fft_execute(s.plan);
-    std::vector<float> result(std::size_t(4000 / binHz) + 1);
+    std::vector<float> result(std::size_t(4000 / s.frequencyStep) + 1);
     for (std::size_t i = 0; i < result.size(); ++i) {
         const double amplitude = std::hypot(double(s.output[i].real), double(s.output[i].imag)) * (i ? 2 : 1) / s.windowSum;
         result[i] = float(std::max(-160.0, 20 * std::log10(std::max(1e-8, amplitude))));

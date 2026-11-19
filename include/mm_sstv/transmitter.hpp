@@ -9,7 +9,7 @@ public:
     explicit Transmitter(std::unique_ptr<AudioOutput> output);
     ~Transmitter();
     AudioOutput& audio() { return *audio_; }
-    void startTest(const std::string& device, bool validFrames = false);
+    void startTest(const std::string& device, bool validFrames = false, Modulation mode = Modulation::Apsk8);
     void startImage(const std::string& device, ImageTransmission transmission);
     void stop() noexcept;
     void setLevel(unsigned percent);

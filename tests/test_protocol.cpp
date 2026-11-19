@@ -57,6 +57,15 @@ int main(int argc, char** argv) {
             FrameSymbols symbols(tx.frames); const unsigned header[]{2, 4, 7, 6, 0, 6, 4, 6};
             for (auto value : header) require(symbols.next() == value, "Wrong MSB-first symbol packing");
         }
+        const std::vector<std::uint8_t> content(56010, 0x42);
+        const auto tx8 = prepareImage(content, "mode.jpg");
+        const auto qpsk = prepareImage(content, "mode.jpg", Modulation::Qpsk4410);
+        require(qpsk.frames == tx8.frames, "QPSK changed the protected frame bytes");
+        require(qpsk.symbols() == qpsk.frames.size() * 1032, "Wrong QPSK frame length");
+        FrameSymbols packed(qpsk.frames, Modulation::Qpsk4410);
+        for (const auto& frame : qpsk.frames) for (const auto value : frame)
+            for (int shift = 6; shift >= 0; shift -= 2) require(packed.next() == ((value >> shift) & 3), "Wrong QPSK bit packing");
+        require(packed.next() == SymbolSource::silence, "QPSK RRC tail is not zero baseband");
         BerSymbols ber;
         Payload berPayload{}; unsigned character = 'A';
         for (auto& value : berPayload) { value = character++; if (character == 'z') character = 'A'; }

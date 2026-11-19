@@ -24,11 +24,15 @@ int main(int argc, char** argv) {
     schifra::galois::field_polynomial generator(field);
     schifra::make_sequential_root_generator_polynomial(field,120,32,generator);
     schifra::reed_solomon::encoder<255,32,223> encoder(field,generator);
-    auto mod=modem_create(LIQUID_MODEM_APSK8);
+    const std::string modulation = argc > 4 ? argv[4] : "8apsk";
+    if (modulation != "8apsk" && modulation != "qpsk4410") return 2;
+    const unsigned bps = modulation == "qpsk4410" ? 2 : 3;
+    const unsigned rate = bps == 2 ? 44100 : 48000, k = bps == 2 ? 20 : 24;
+    auto mod=modem_create(bps == 2 ? LIQUID_MODEM_QPSK : LIQUID_MODEM_APSK8);
     float h[721];
-    liquid_firdes_prototype(LIQUID_FIRFILT_RRC,24,15,0.2f,-0.2f,h);
-    auto interp=firinterp_crcf_create(24,h,721);
-    double phase=0, pilot_phase=0;
+    liquid_firdes_prototype(LIQUID_FIRFILT_RRC,k,15,0.2f,-0.2f,h);
+    auto interp=firinterp_crcf_create(k,h,2*k*15+1);
+    double phase=argc > 5 ? atof(argv[5]) : 0, pilot_phase=0;
     uint64_t audio_samples = 0;
     for(int frame=0;frame<frame_count;++frame) {
         uint8_t raw[223]={}; raw[0]=frame; raw[1]=8|0x30;
@@ -48,18 +52,20 @@ int main(int argc, char** argv) {
         unsigned int acc=0; int bits=0;
         for(auto byte:air) {
             acc=(acc<<8)|byte;bits+=8;
-            while(bits>=3) {
-                bits-=3;unsigned int sym=(acc>>bits)&7;
+            while(bits>=int(bps)) {
+                bits-=bps;unsigned int sym=(acc>>bits)&((1u<<bps)-1);
+                if (bps == 2) sym ^= sym >> 1;
                 liquid_float_complex x,y[24];modem_modulate(mod,sym,&x);
                 firinterp_crcf_execute(interp,x,y);
-                for(auto c:y) {
-                    double t = audio_samples++/48000.0;
+                for(unsigned yi=0; yi<k; ++yi) {
+                    const auto c = y[yi];
+                    double t = audio_samples++/double(rate);
                     double frequency_offset = offset;
                     if(mode == "drift") frequency_offset += t;
                     if(mode == "jump" && t >= 8) frequency_offset += 70;
                     if(mode == "dropout" && t >= 11) frequency_offset += 40;
-                    phase+=2*M_PI*(1500+frequency_offset)/48000;
-                    pilot_phase+=2*M_PI*(100+frequency_offset)/48000;
+                    phase+=2*M_PI*(1500+frequency_offset)/double(rate);
+                    pilot_phase+=2*M_PI*(100+frequency_offset)/double(rate);
                     // Matches the original SSB audio synthesis (real + imag).
                     float re=c.real*cos(phase)-c.imag*sin(phase);
                     float im=c.real*sin(phase)+c.imag*cos(phase);

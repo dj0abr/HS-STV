@@ -62,6 +62,7 @@ private:
 MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings, std::unique_ptr<AudioInput> input)
     : transmitter_(std::move(output)), settings_(settings), receiver_(std::move(input)) {
     setWindowTitle("mm-sstv · Bilder senden und empfangen"); setMinimumSize(640, 440);
+    mode_ = settings_.value("modem/modulation", "8apsk").toString() == "qpsk4410" ? Modulation::Qpsk4410 : Modulation::Apsk8;
     inputDevice_ = settings_.value("audio/input", "fromQO100").toString().toStdString();
     device_ = settings_.value("audio/output", "toQO100").toString().toStdString();
     level_ = std::clamp(settings_.value("audio/level", 35).toInt(), 0, 100);
@@ -113,12 +114,20 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     styleProgress(progress_, "#e76969"); styleProgress(receiveProgress_, "#5ab875");
     panes->addWidget(progress_, 3, 0); panes->addWidget(receiveProgress_, 3, 1);
     layout->addLayout(panes, 1);
-    monitor_ = new ReceiveMonitor(central); layout->addWidget(monitor_);
+    monitor_ = new ReceiveMonitor(central); monitor_->clear("Warte auf Audiodaten", mode_); layout->addWidget(monitor_);
     auto* footer = new QHBoxLayout; footer->setSpacing(8);
     status_ = new CompactLabel(central, Qt::ElideRight); status_->setObjectName("statusText"); footer->addWidget(status_, 1);
-    auto* description = new QLabel(QString("8APSK · %1 bit/s").arg(TxModulator::bitRate), central);
-    description->setToolTip(QString("Sendereferenzträger %1 Hz").arg(TxModulator::pilotHz));
-    description->setObjectName("modulationInfo"); footer->addWidget(description); layout->addLayout(footer);
+    modes_ = new QComboBox(central); modes_->setObjectName("modulation");
+    for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410})
+        modes_->addItem(QString("%1 · %2 bit/s").arg(modulationName(mode)).arg(parameters(mode).bitRate()), int(mode));
+    modes_->setCurrentIndex(mode_ == Modulation::Apsk8 ? 0 : 1);
+    modes_->setToolTip("Modulation für Senden und Empfang; beide Stationen gleich einstellen.\n8APSK 6000 oder QPSK 4410 für schwächere Signale, jeweils HS-Modem-kompatibel.\nSendereferenzträger 100 Hz.");
+    footer->addWidget(modes_); layout->addLayout(footer);
+    connect(modes_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
+        mode_ = static_cast<Modulation>(modes_->currentData().toInt());
+        settings_.setValue("modem/modulation", mode_ == Modulation::Apsk8 ? "8apsk" : "qpsk4410");
+        prepare(); restartReceiver();
+    });
     setCentralWidget(central);
     QSize initialSize(900, 560);
     if (const auto* screen = QGuiApplication::primaryScreen()) initialSize = initialSize.boundedTo(screen->availableGeometry().size() - QSize(24, 48));
@@ -140,7 +149,7 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
         receiveStatus_->setText(text); receiveStatus_->setToolTip(details);
     };
     receiver_.failed = [this](const QString& text) {
-        monitor_->clear("Empfang unterbrochen"); receiveStatus_->setToolTip({});
+        monitor_->clear("Empfang unterbrochen", mode_); receiveStatus_->setToolTip({});
         receiveStatus_->setText(text); receiveRetry_->start();
     };
     refreshDevices();
@@ -154,7 +163,7 @@ void MainWindow::updateButton() {
     const bool running = transmitter_.running();
     start_->setText(running ? "STOP" : "Senden");
     start_->setEnabled(running || (deviceAvailable() && image_.has_value()));
-    sizes_->setEnabled(!running); preview_->setEditable(!running); open_->setEnabled(!running);
+    modes_->setEnabled(!running); sizes_->setEnabled(!running); preview_->setEditable(!running); open_->setEnabled(!running);
 }
 void MainWindow::showReady() {
     if (deviceAvailable()) status_->setText("Bereit · " + QString::fromStdString(device_) + " · " + QString::number(level_) + " %");
@@ -209,8 +218,8 @@ void MainWindow::prepare() {
     if (original_.isNull()) { updateButton(); return; }
     try {
         const auto picture = preparePicture(original_, sizes_->currentData().toSize());
-        image_ = prepareImage(picture.jpeg, filename_.toUtf8().toStdString()); preview_->setImage(picture.preview);
-        const auto seconds = (image_->audioFrames() + TxModulator::sampleRate - 1) / TxModulator::sampleRate;
+        image_ = prepareImage(picture.jpeg, filename_.toUtf8().toStdString(), mode_); preview_->setImage(picture.preview);
+        const auto seconds = (image_->audioFrames() + parameters(mode_).sampleRate - 1) / parameters(mode_).sampleRate;
         imageInfo_->setText(QString("%1 · %2 × %3 · %4 kB · %5 s")
             .arg(QString::fromStdString(image_->filename)).arg(picture.preview.width()).arg(picture.preview.height())
             .arg(image_->jpegBytes / 1000., 0, 'f', 1).arg(seconds));
@@ -218,10 +227,10 @@ void MainWindow::prepare() {
     } catch (const std::exception& e) { imageInfo_->clear(); status_->setText(QString::fromUtf8(e.what())); updateButton(); }
 }
 void MainWindow::restartReceiver() {
-    monitor_->clear(); receiveStatus_->setToolTip({});
+    monitor_->clear("Warte auf Audiodaten", mode_); receiveStatus_->setToolTip({});
     receiveRetry_->stop();
     if (!receiver_.available()) { receiveStatus_->setText("Kein Audioeingang"); return; }
-    try { receiver_.start(inputDevice_); }
+    try { receiver_.start(inputDevice_, mode_); }
     catch (const std::exception& e) {
         receiveStatus_->setText(QString::fromUtf8(e.what())); receiveRetry_->start();
     }
@@ -294,8 +303,8 @@ void MainWindow::setup() {
     auto* percent = new QLabel(QString::number(level_) + " %", &dialog); percent->setMinimumWidth(45);
     sliderRow->addWidget(slider, 1); sliderRow->addWidget(percent); form->addRow("Sendepegel", sliderRow);
     layout->addLayout(form);
-    auto* info = new QLabel(QString("%1 kHz · Mono · 8APSK %2 bit/s\n100 % = digitale Vollaussteuerung.\nDaten und %3-Hz-Referenzträger werden gemeinsam geregelt.")
-        .arg(TxModulator::sampleRate / 1000).arg(TxModulator::bitRate).arg(TxModulator::pilotHz), &dialog);
+    auto* info = new QLabel(QString("%1 kHz · Mono · %2 %3 bit/s\n100 % = digitale Vollaussteuerung.\nDaten und %4-Hz-Referenzträger werden gemeinsam geregelt.")
+        .arg(parameters(mode_).sampleRate / 1000., 0, 'f', 1).arg(modulationName(mode_)).arg(parameters(mode_).bitRate()).arg(TxModulator::pilotHz), &dialog);
     info->setWordWrap(true); layout->addWidget(info);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog); layout->addWidget(buttons);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);

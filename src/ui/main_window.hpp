@@ -54,6 +54,8 @@ private:
     QString filename_;
     std::optional<ImageTransmission> image_;
     ImagePanel* preview_ = nullptr;
+    Modulation mode_ = Modulation::Apsk8;
+    QComboBox* modes_ = nullptr;
     QComboBox* sizes_ = nullptr;
     QPushButton* start_ = nullptr;
     QLabel* status_ = nullptr;
