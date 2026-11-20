@@ -196,7 +196,8 @@ verworfen. Die Anzeige und ihr Tooltip unterscheiden diese Kandidaten von
 CRC-bestätigten Frames und erfolgreichen Reparaturen.
 
 Bei SSTV gelten die Zähler für das aktuelle/letzte Bild. Dargestellte Zeilen ohne
-bestätigten Sync und übersprungene Zeilen zählen als nicht erkannt. Nach einem
+bestätigten Sync zählen als nicht erkannt; die Ausgabe läuft mit internem
+Zeilentakt auch bei längeren Syncausfällen weiter. Nach einem
 Bild mit VIS werden am Ende alle 256 erwarteten Zeilensyncs berücksichtigt;
 bei späterem Einstieg ohne VIS nur die seit Einstieg ausgewerteten Zeilen.
 Tests prüfen RS-Reparaturen von 1, 3 und 16 Bytes, nicht reparierbare Blöcke,

@@ -86,8 +86,8 @@ with tempfile.TemporaryDirectory() as directory:
         assert any(e['event'] == 'sstv_line' for e in interrupted_events)
         assert [e['complete'] for e in interrupted_events if e['event'] == 'sstv_end'] == [False]
         print(f'{mode}: missing VIS and interrupted stream preserve partial status')
-        # Remove eight real sync pulses. Skipped rows must count too, rather than
-        # counting only unsynchronized lines that the decoder chose to render.
+        # Removing sync pulses must keep all video rows flowing through the real
+        # 48-kHz receiver process, while preserving honest sync statistics.
         damaged = samples.copy()
         for row in range(50, 58):
             first = round((start + row * period + sync_start) * 48000)
@@ -98,6 +98,16 @@ with tempfile.TemporaryDirectory() as directory:
         damaged_events = [json.loads(line) for line in result.stdout.splitlines()]
         damaged_status = [e for e in damaged_events if e['event'] == 'status'][-1]
         damaged_lines = [e for e in damaged_events if e['event'] == 'sstv_line']
+        assert [e['index'] for e in damaged_lines] == list(range(256)), (mode, len(damaged_lines))
+        assert all(not damaged_lines[row]['synchronized'] for row in range(50, 58))
+        assert damaged_lines[58]['synchronized'], 'Did not accept first returning sync'
+        assert any(e['event'] == 'status' and e['receiving'] and not e['locked']
+                   and 54 <= e['received_lines'] <= 58 for e in damaged_events), 'No live holdover status'
+        damaged_rgb = np.array([list(bytes.fromhex(e['rgb_hex'])) for e in damaged_lines],
+                               dtype=np.int16).reshape(256, 320, 3)
+        assert np.abs(damaged_rgb[50:58, [35, 115, 195, 275], :] -
+                      pixels[50:58, [35, 115, 195, 275], :]).mean() < 6, 'Holdover lost video'
+        assert [e['complete'] for e in damaged_events if e['event'] == 'sstv_end'] == [True]
         assert damaged_status['sync_missed'] >= 8, (mode, damaged_status['sync_missed'])
         assert damaged_status['sync_detected'] == sum(line['synchronized'] for line in damaged_lines)
         assert damaged_status['sync_detected'] + damaged_status['sync_missed'] == 256

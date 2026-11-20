@@ -23,7 +23,7 @@ struct Frame {
 };
 
 struct Line {
-    unsigned index; // Row in the raster. Unrecoverable rows are omitted.
+    unsigned index; // Row in the raster, also emitted during sync holdover.
     RgbLine rgb;
     bool synchronized;
     double frequency_offset_hz; // Measured audio frequency minus nominal.

@@ -21,7 +21,7 @@ constexpr double line_period_gain = 0.12;
 constexpr double line_sync_lock_us = 2500;
 constexpr double line_sync_confirmation_us = 1500;
 constexpr double line_sync_confirmation_hz = 90;
-constexpr unsigned estimated_lines = 3;
+constexpr unsigned line_clock_history = 16;
 constexpr unsigned partial_sync_timeout_lines = 16;
 
 struct Measurement {
@@ -78,11 +78,15 @@ struct Decoder::Impl {
         std::optional<Pulse> matched;
         std::optional<Pulse> following;
         std::optional<double> last_sync;
-        unsigned last_sync_row = 0;
         unsigned missing = 0;
         bool partial = false;
         bool has_gaps = false;
         std::optional<Pulse> off_phase_sync{};
+        unsigned off_phase_row = 0;
+        std::int64_t last_video = 0;
+        struct Anchor { unsigned row; double time; };
+        std::array<Anchor, line_clock_history> anchors{};
+        unsigned anchor_count = 0;
     };
     std::optional<Reception> frame;
 
@@ -195,7 +199,11 @@ struct Decoder::Impl {
             run.hz += 0.10 * (tone.hz - run.hz);
         }
         if (vis && now >= vis->start + samples(vis_data_us - 5000)) check_vis();
-        if (frame) decode_ready_line(now);
+        if (frame) {
+            if (valid && tone.hz >= black_hz + frame->offset - 100 &&
+                tone.hz <= white_hz + frame->offset + 100) frame->last_video = now;
+            decode_ready_line(now);
+        }
     }
 
     double rising_edge(std::int64_t around, double before, double threshold) const {
@@ -271,10 +279,11 @@ struct Decoder::Impl {
             auto& current = *frame;
             const auto expected_length = samples(current.format.sync_us);
             Pulse candidate{end - expected_length, found.length, found.offset};
-            // Keep a tight gate while locked. Uncertainty grows while the
-            // receiver extrapolates the line clock without valid sync.
+            // Keep looking outside the tracking gate too. Off-phase pulses
+            // must be confirmed before they can move the clock; otherwise a
+            // phase jump outside the old 29.5-ms gate could never recover.
             const auto window = current.last_sync
-                ? samples(5500 + 2000 * std::min(current.missing, 12u))
+                ? current.period * 0.45
                 : samples(20000);
             if (std::abs(found.length - expected_length) > samples(2900) ||
                 std::abs(candidate.offset - current.offset) > 145) return;
@@ -318,8 +327,36 @@ struct Decoder::Impl {
 
     void begin(Mode mode, bool partial, double sync, double offset, double period) {
         end_frame(false);
-        frame.emplace(Reception{timing(mode), 0, offset, period, sync, {}, {}, {}, 0, 0, partial});
+        frame.emplace(Reception{timing(mode), 0, offset, period, sync, {}, {}, {}, 0, partial});
+        frame->last_video = clock;
         if (callbacks.begin) callbacks.begin({mode, partial});
+    }
+
+    void update_period(Reception& current, double sync, bool restart, bool established) {
+        // The first Martin sync may only be a provisional VIS-derived anchor:
+        // a shortened stop bit shifts it without changing the sender's clock.
+        if (current.row == 0 && !current.partial && current.format.sync_start_us == 0) return;
+        // A phase correction after a dropout must not masquerade as clock drift.
+        // Fit several trusted anchors, starting afresh after a gap or re-anchor.
+        if (restart) current.anchor_count = 0;
+        if (current.anchor_count == line_clock_history) {
+            std::move(current.anchors.begin() + 1, current.anchors.end(), current.anchors.begin());
+            --current.anchor_count;
+        }
+        current.anchors[current.anchor_count++] = {current.row, sync};
+        if (current.anchor_count < 2) return;
+        const auto origin = current.anchors[0];
+        double x = 0, y = 0, xx = 0, xy = 0;
+        for (unsigned i = 0; i < current.anchor_count; ++i) {
+            const double row = current.anchors[i].row - origin.row;
+            const double time = current.anchors[i].time - origin.time;
+            x += row; y += time; xx += row * row; xy += row * time;
+        }
+        const double n = current.anchor_count;
+        const double period = (n * xy - x * y) / (n * xx - x * x);
+        const auto nominal = samples(current.format.line_us);
+        if (std::abs(period - nominal) < nominal * 0.03)
+            current.period += (established ? line_period_gain : 0.24) * (period - current.period);
     }
 
     void decode_ready_line(std::int64_t now) {
@@ -329,15 +366,19 @@ struct Decoder::Impl {
         const bool established = current.last_sync && current.row >= line_clock_acquisition;
         const auto candidate = current.matched;
         // Once locked, a pulse far from the row clock can be interference.
-        // Re-anchor only after two consecutive off-phase pulses agree.
+        // A longer holdover permits a larger immediate correction. Large
+        // changes still need a second pulse, which may be several rows later.
+        const auto lock_window = samples(line_sync_lock_us + 1500 * std::min(current.missing, 12u));
         const bool off_phase = established && candidate &&
-            std::abs(candidate->start - current.predicted_sync) > samples(line_sync_lock_us);
+            std::abs(candidate->start - current.predicted_sync) > lock_window;
         const bool confirmed = off_phase && current.off_phase_sync &&
-            std::abs(candidate->start - current.off_phase_sync->start - current.period) <=
+            current.row > current.off_phase_row && current.row - current.off_phase_row <= 16 &&
+            std::abs(candidate->start - current.off_phase_sync->start -
+                (current.row - current.off_phase_row) * current.period) <=
                 samples(line_sync_confirmation_us) &&
             std::abs(candidate->offset - current.off_phase_sync->offset) <= line_sync_confirmation_hz;
         const bool synchronized = candidate && (!off_phase || confirmed);
-        const bool tracking = established && !confirmed && current.missing < estimated_lines;
+        const bool tracking = established && !confirmed && current.missing == 0;
         const auto observed_sync = synchronized ? candidate->start : current.predicted_sync;
         const double sync = current.predicted_sync +
             (tracking ? line_phase_gain : 1.0) * (observed_sync - current.predicted_sync);
@@ -345,7 +386,12 @@ struct Decoder::Impl {
         const double line_start = sync - samples(format.sync_start_us) * scale;
         if (now < line_start + current.period + 8) return;
 
-        current.off_phase_sync = off_phase && !confirmed ? candidate : std::nullopt;
+        if (synchronized || (current.off_phase_sync && current.row - current.off_phase_row > 16))
+            current.off_phase_sync.reset();
+        if (off_phase && !confirmed) {
+            current.off_phase_sync = candidate;
+            current.off_phase_row = current.row;
+        }
         if (synchronized) {
             // Average the tone frequency independently of the line clock.
             // Limit the influence of a single noisy pulse, including after
@@ -354,25 +400,21 @@ struct Decoder::Impl {
                                             -afc_max_error_hz, afc_max_error_hz);
             const double gain = -std::expm1(-current.period / (sample_rate * afc_time_seconds));
             current.offset += gain * error;
-            if (current.last_sync) {
-                const double interval = (observed_sync - *current.last_sync) / (current.row - current.last_sync_row);
-                if (std::abs(interval - nominal_period) < nominal_period * 0.03)
-                    current.period += (tracking ? line_period_gain : 0.24) * (interval - current.period);
-            }
+            update_period(current, observed_sync, confirmed || current.missing != 0, established);
             current.last_sync = observed_sync;
-            current.last_sync_row = current.row;
             current.missing = 0;
         } else {
             ++current.missing;
-            // A VIS start gives us an absolute row clock through the end of
-            // the picture. A late entry has no known end and can time out.
-            if (current.partial && current.missing >= partial_sync_timeout_lines) {
+            // Missing sync alone must not end a late-entry picture while its
+            // video is still present. Stop when both sync and video disappear.
+            if (current.partial && current.missing >= partial_sync_timeout_lines &&
+                now - current.last_video >= 4 * current.period) {
                 end_frame(false);
                 return;
             }
         }
 
-        if (current.missing <= estimated_lines) {
+        {
             Line line{current.row, {}, synchronized, current.offset - dial_shift};
             const double pixel = samples(format.scan_us) * scale / width;
             for (unsigned color = 0; color < 3; ++color) {
@@ -390,13 +432,11 @@ struct Decoder::Impl {
                 }
             }
             if (callbacks.line) callbacks.line(line);
-        } else {
-            // Leave a gap in the raster while retaining the absolute row.
-            current.has_gaps = true;
         }
+        if (current.last_video < line_start) current.has_gaps = true;
 
         if (++current.row == height) {
-            end_frame(!current.has_gaps);
+            end_frame(!current.has_gaps && !current.partial);
         } else {
             current.predicted_sync = sync + current.period;
             current.matched = std::exchange(current.following, std::nullopt);

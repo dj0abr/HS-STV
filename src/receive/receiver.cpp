@@ -123,7 +123,7 @@ void Receiver::readOutput() {
                     status.points.push_back({float(x), float(y)});
             }
             const auto state = json.value("afc_state").toString();
-            status.state = isSstv(mode_) ? (status.locked ? "Zeilensynchron" : json.value("receiving").toBool() ? "Bildempfang · warte Zeilensync" : "Suche SSTV") : status.locked ? "Synchronisiert" : state == "acquiring" ? "Pilot gefunden · synchronisiere" : state == "hold" ? "Nachführung" : "Suche";
+            status.state = isSstv(mode_) ? (status.locked ? "Zeilensynchron" : json.value("receiving").toBool() ? "Bildempfang · Freilauf" : "Suche SSTV") : status.locked ? "Synchronisiert" : state == "acquiring" ? "Pilot gefunden · synchronisiere" : state == "hold" ? "Nachführung" : "Suche";
             if (statusChanged) statusChanged(status);
         } else if (event.startsWith("sstv_") && isSstv(mode_)) {
             SstvUpdate update; update.modulation = mode_;

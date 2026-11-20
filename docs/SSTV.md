@@ -33,7 +33,8 @@ wächst zeilenweise; der grüne Balken zählt tatsächlich empfangene Zeilen.
 Auch Teilempfang ohne VIS ist möglich. Ein Teilempfang oder unterbrochenes Bild
 wird nicht als vollständig gemeldet. Nach vollständigem Empfang steht unter dem Bild
 **Empfang abgeschlossen**. Die RX-Zeile zeigt den AFC-Versatz und die Zahl erkannter
-bzw. nicht erkannter Zeilensyncs, einschließlich übersprungener Zeilen. Die Werte
+bzw. nicht erkannter Zeilensyncs. Zeilen ohne bestätigten Sync werden im Freilauf
+weiter dekodiert und als nicht erkannter Sync gezählt. Die Werte
 gelten für das aktuelle/letzte Bild; bei einem neuen Bild beginnen sie erneut.
  Bei Empfangsende werden die Bilder automatisch
 als PNG in **rxpic** gespeichert. Auch Teilempfang wird beim Empfangsende, Wechseln
@@ -72,18 +73,35 @@ Encoder, Decoder, Timing und ursprüngliche Regressionstests stammen aus dem
 lokalen QO100_TRX2-Projekt. Originalpfade, Basisrevision und SHA-256 stehen in
 `external/qo100-sstv/SOURCE.json`. Der Decoder enthält VIS-Erkennung, AFC,
 Zeilensynchronisation, Nachführung und Wiedereinstieg. Für Martin 2 / Scottie 2
-wurden die Modustabelle und die modusspezifischen Akquisitionszustände erweitert;
-Filterung und Nachführung bleiben erhalten.
+wurden die Modustabelle und die modusspezifischen Akquisitionszustände erweitert.
+Die Filterung bleibt erhalten; die Zeilennachführung wurde für Syncausfälle überarbeitet.
+
+Der Zeilentakt basiert auf den Audiosamples und läuft bei fehlenden Syncs weiter.
+Alle Zeilen werden ausgegeben, solange ein Bild aktiv ist; die Anzeige wechselt
+bei fehlender Syncbestätigung auf **Bildempfang · Freilauf**. Die Zeilendauer wird
+aus bis zu 16 bestätigten Syncpunkten geschätzt und im Freilauf beibehalten.
+Nach einer Unterbrechung wird die Phase korrigiert, ohne den Phasensprung als
+Änderung der Zeilendauer zu übernehmen. Kleine Abweichungen werden sofort
+angenommen; die Toleranz wächst mit der Dauer des Freilaufs. Größere Sprünge
+erfordern zwei passende Impulse, zwischen denen bis zu 16 Zeilen liegen dürfen.
+Die Suche erfasst bis zu 45 % einer Zeilendauer um die erwartete Syncposition.
+
+Auch beim Teilempfang ohne VIS beendet ein reiner Syncausfall das Bild nicht,
+solange noch Bildsignal vorhanden ist. Erst bei mindestens 16 fehlenden Syncs
+und vier Zeilendauern ohne Bildsignal wird abgebrochen. Teilempfang bleibt als
+unvollständig gekennzeichnet. Bei VIS zählt ein bis zum Ende dekodiertes Raster
+als vollständig, sofern keine ganze Zeile ohne Bildsignal blieb; dies ist keine
+Aussage über die störungsfreie Bildqualität.
 
 Die einzige Encoder-Erweiterung ist eine optionale native 48-kHz-Ausgabe mit
 Phasenzugriff für den Ausklang. Die ursprüngliche 12-kHz-Ausgabe bleibt der
-Standard und wird mit den unveränderten Originaltests geprüft.
+Standard und wird mit den übernommenen Regressionstests geprüft.
 `SstvAudio` umgibt den Encoder mit endlicher Dauer, Pegelregelung und Fortschritt.
 Beide Komponenten sind C++17 ohne Qt oder Betriebssystemzugriffe.
 
 Die vorhandenen PulseAudio-/PortAudio-Adapter arbeiten für SSTV mit 48-kHz-Mono.
 `hs-stv-sstv-rx-core` filtert und dezimiert dieses Audio auf 12 kHz für den
-Originaldecoder. Die GUI empfängt RGB-Zeilen und Spektren über die vorhandene
+portierten Decoder. Die GUI empfängt RGB-Zeilen und Spektren über die vorhandene
 Qt-Prozessanbindung. Es werden weder die Transceiversteuerung noch Netzwerk-,
 FFTW- oder Audioabhängigkeiten aus QO100_TRX2 übernommen.
 
@@ -98,13 +116,22 @@ ctest --test-dir build --output-on-failure
 ./build/bin/hs-stv-sstv-signal /pfad/bild.png /tmp/bild.wav scottie1 100
 ```
 
-Die unveränderten Originaltests prüfen Martin 1 und Scottie 1 mit unabhängigen Signalen, schwachem
+Die übernommenen Regressionstests prüfen Martin 1 und Scottie 1 mit unabhängigen Signalen, schwachem
 Pegel, Rauschen, Frequenzversatz, Timingfehlern, fehlendem VIS und falschen oder
 fehlenden Syncpulsen. Zusätzliche Prüfungen führen native 48-kHz-Sendedaten durch
 den echten RX-Prozess und prüfen alle 256 Zeilen, Farbinhalte, Spektrum,
 kalibrierten Sendepegel und Teilbildstatus. GUI-Tests prüfen alle vier SSTV-Modi einschließlich
 Senden/STOP, laufendem Empfang, PNG-Speicherung und Wiederherstellung der digitalen
-Bildgröße. Eine Prüfung über den Satelliten erfolgt anschließend an der Station.
+Bildgröße. Der anschließende Praxistest über QO-100 bestätigte den durchgehenden
+Bildempfang auch bei längeren Syncausfällen ohne Abbruch.
+
+Die Erwartungen der ursprünglichen Ausfalltests wurden auf durchgehende
+Zeilenausgabe angepasst. `sstv_sync_holdover` prüft alle vier Modi mit 24 fehlenden
+Syncs, 0,2 % Taktabweichung, Phasensprüngen von +12 sowie ±40 ms und nur vereinzelt
+zurückkehrenden Syncs. Dabei werden Zeilenreihenfolge, laufende Ausgabe während
+des Ausfalls, RGB-Inhalt, Wiedereinrasten und Teilempfang geprüft. Ein zusätzlicher
+Fall stellt sicher, dass ein Teilempfang nach vollständigem Signalverlust endet.
+Der native 48-kHz-Rundlauf prüft außerdem Bildinhalt und Status im Freilauf.
 
 Für Martin 2 und Scottie 2 gibt es zusätzlich unabhängige 12-kHz-Referenzsignale
 mit VIS/Teileinstieg, Frequenzversatz und fehlenden Syncs. Die 48-kHz-Audioexport-

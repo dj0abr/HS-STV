@@ -394,7 +394,7 @@ void MainWindow::showReceiveStatistics(const ReceiveStatus& status) {
         receiveStatistics_->setText(QString("RX · AFC %1 Hz · Sync erkannt %2 · nicht erkannt %3")
             .arg(status.offset, 0, 'f', 1).arg(qulonglong(status.syncDetected)).arg(qulonglong(status.syncMissed)));
         receiveStatistics_->setToolTip("Zeilensyncs des aktuellen/letzten SSTV-Bildes.\n"
-            "Ohne passenden Sync dargestellte oder übersprungene Zeilen zählen als nicht erkannt.\n"
+            "Im Freilauf dargestellte Zeilen ohne bestätigten Sync zählen als nicht erkannt.\n"
             "Bei VIS-Empfang werden am Bildende alle 256 erwarteten Zeilensyncs berücksichtigt;\n"
             "beim Teileinstieg ohne VIS nur die seit dem Einstieg ausgewerteten Zeilen.");
     } else {

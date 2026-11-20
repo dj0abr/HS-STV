@@ -146,10 +146,23 @@ Programmbaustein übernommen. Die Bilder werden wie bei QSSTV mit 320 × 256 Pix
 aufbereitet und dargestellt. Die verkürzten Scans begrenzen die horizontale
 Detailauflösung der analogen Übertragung.
 
-Im übernommenen Decoder wurden nur die Liste möglicher Modi, die Größe der
+Für die Moduserweiterung wurden im übernommenen Decoder die Liste möglicher Modi, die Größe der
 Akquisitionszustände und die anfängliche Martin-Sync-Zuordnung erweitert. Die
 ursprünglichen 22 Prüfungen für M1/S1 bleiben unverändert enthalten; neue
 unabhängige Referenzsignale prüfen M2/S2 zusätzlich.
+
+## SSTV-Freilauf und Wiedereinrasten
+
+Die lokale Zeilennachführung wurde anschließend für längere Syncausfälle
+überarbeitet: durchgehende RGB-Ausgabe, Regression über bis zu 16 Syncpunkte,
+getrennte Phasen- und Periodenkorrektur, erweiterte Suche und Bestätigung auch
+über ausgelassene Syncimpulse hinweg. Beim Teilempfang hängt der Abbruch nun
+zusätzlich vom Ausbleiben des Bildsignals ab. Filter und Tonimpulserkennung
+bleiben erhalten. Die Architektur wurde mit QSSTV (`syncprocessor.cpp`,
+`modes/modebase.cpp`) verglichen; es wurde kein QSSTV-Programmcode übernommen.
+Die bisherigen Regressionstests wurden für die gewünschte durchgehende Ausgabe
+angepasst; `tests/test_sstv_sync.cpp` ergänzt unabhängige Signale für alle vier Modi.
+Die Prüfsummen im SSTV-Manifest dokumentieren weiterhin die übernommenen Originale.
 
 ## Bildtexte
 

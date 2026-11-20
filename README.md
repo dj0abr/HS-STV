@@ -57,7 +57,9 @@ Eine kompakte RX-Zeile zeigt AFC sowie bei digitalem Empfang gültige Frames,
 CRC-Fehler, FEC-korrigierte Frames und verworfene FEC-Kandidaten. Der Tooltip
 enthält zusätzlich die Zahl korrigierter RS-Bytes und erklärt die Zähler.
 Bei SSTV erscheinen erkannte und nicht erkannte Zeilensyncs des aktuellen bzw.
-letzten Bildes. Digitale Zähler laufen seit dem Start des Empfangs und werden
+letzten Bildes. Bei fehlenden Syncs läuft die Bildausgabe mit dem internen
+Zeilentakt weiter; die Anzeige meldet **Bildempfang · Freilauf**.
+Digitale Zähler laufen seit dem Start des Empfangs und werden
 beim Eingangs-/Moduswechsel zurückgesetzt.
 
 Empfangene Bilder werden automatisch im Unterordner **rxpic** des Arbeitsverzeichnisses

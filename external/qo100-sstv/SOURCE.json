@@ -29,10 +29,11 @@
     }
   ],
   "local_changes": {
-    "sstv/sstv.hpp": "Optional encoder sample rate (default unchanged at 12000 Hz), plus phase accessor for a phase-continuous output fade. Martin M2 / Scottie S2 enum values.",
+    "sstv/sstv.hpp": "Optional encoder sample rate (default unchanged at 12000 Hz), plus phase accessor for a phase-continuous output fade. Martin M2 / Scottie S2 enum values. Document continuous line delivery during sync holdover.",
     "sstv/encoder.cpp": "Generate native 48000-Hz PCM when requested; the original 12000-Hz path is unchanged.",
     "sstv/timing.hpp": "Add Martin M2 (VIS40, 73.216-ms scans) and Scottie S2 (VIS56, 88.064-ms scans); existing mode timings remain unchanged.",
-    "sstv/decoder.cpp": "Extend VIS and late-entry acquisition to all four modes and apply the contiguous Martin VIS-stop sync rule to M2 as well. DSP filtering/tracking is unchanged."
+    "sstv/decoder.cpp": "Extend VIS and late-entry acquisition to all four modes and apply the contiguous Martin VIS-stop sync rule to M2 as well. Continuous video during sync loss, 16-anchor line-period regression, separate phase re-anchoring, wider sync search with confirmation across missing pulses, and partial timeout conditional on missing video. DSP filtering and tone detection are unchanged.",
+    "tests/test_sstv.cpp": "Adapt outage and false-sync expectations to continuous row delivery and prompt holdover recovery; retain the original signal and interference cases."
   },
   "mode_parameter_references": [
     "https://raw.githubusercontent.com/ON4QZ/QSSTV/master/src/sstv/sstvparam.cpp",

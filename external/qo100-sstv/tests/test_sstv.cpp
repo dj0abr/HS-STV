@@ -244,22 +244,24 @@ void test_reacquisition(Mode mode, bool header) {
 
     require(recording.frames.size() == 1 && recording.frames.front().partial == !header,
         "created a new image after an interruption");
-    require(recording.endings == std::vector<bool>{false}, "reported an image with missing rows as complete");
+    require(recording.endings == std::vector<bool>{header}, "incorrect completion status after sync-only outages");
     require(!recording.lines.empty() && recording.lines.back().index >= (header ? height - 1 : height - 8),
         "did not resume to the final row");
     const unsigned row_offset = height - 1 - recording.lines.back().index;
 
     for (const auto& [first, end] : outages) {
-        // After the final gap the whole signal is 12 ms late. A second
-        // off-phase pulse must confirm that this really is a timing shift.
-        const unsigned expected_row = end - row_offset + (end == outages.back().second ? 1 : 0);
+        // Holdover uncertainty permits the first returning sync, including
+        // the 12-ms phase shift after the longest outage.
+        const unsigned expected_row = end - row_offset;
         const auto resumed = std::find_if(recording.lines.begin(), recording.lines.end(),
             [expected_row](const Line& line) { return line.index >= expected_row; });
         require(resumed != recording.lines.end() && resumed->index == expected_row && resumed->synchronized,
             "did not regain sync at the correct row");
-        require(std::none_of(recording.lines.begin(), recording.lines.end(),
-            [&](const Line& line) { return line.index + row_offset >= first + 3 && line.index < expected_row; }),
-            "emitted estimated rows throughout the interruption");
+        for (unsigned row = first; row < end; ++row) {
+            const auto& line = recording.lines.at(row - row_offset);
+            require(line.index == row - row_offset && !line.synchronized,
+                "did not continuously render the sync outage");
+        }
         for (unsigned x : {35u, 115u, 195u, 275u})
             for (unsigned color = 0; color < 3; ++color) {
                 const auto index = 3 * x + color;
@@ -337,7 +339,7 @@ void test_false_sync(Mode mode) {
         decoder.push(signal.pcm.data() + i, std::min<std::size_t>(240, signal.pcm.size() - i));
     decoder.finish();
 
-    require(recording.frames.size() == 1 && recording.lines.size() == height - 1,
+    require(recording.frames.size() == 1 && recording.lines.size() == height,
         "false sync interrupted the image");
     require(recording.lines[40].index == 40 && !recording.lines[40].synchronized,
         "accepted a false pulse while locked");
@@ -350,7 +352,8 @@ void test_false_sync(Mode mode) {
     require(edge_error < 48, "false pulse shifted the affected line");
     require(recording.lines[41].index == 41 && recording.lines[41].synchronized,
         "false pulse displaced the next line");
-    require(recording.lines[80].index == 81 && recording.lines[80].synchronized,
+    require(recording.lines[80].index == 80 && !recording.lines[80].synchronized &&
+        recording.lines[81].index == 81 && recording.lines[81].synchronized,
         "relocked to a single false pulse after a gap");
 }
 
