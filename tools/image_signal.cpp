@@ -20,7 +20,7 @@ int main(int argc, char** argv) {
     QCoreApplication app(argc, argv);
     try {
         if (argc != 3 && argc != 6 && argc != 7) {
-            std::cerr << "Usage: mm-sstv-image-signal INPUT OUTPUT.wav [WIDTH HEIGHT LEVEL_PERCENT [8apsk|qpsk4410]]\n"; return 2;
+            std::cerr << "Usage: hs-stv-image-signal INPUT OUTPUT.wav [WIDTH HEIGHT LEVEL_PERCENT [8apsk|qpsk4410]]\n"; return 2;
         }
         const int width = argc >= 6 ? std::stoi(argv[3]) : 640, height = argc >= 6 ? std::stoi(argv[4]) : 480;
         const int level = argc >= 6 ? std::stoi(argv[5]) : 100;

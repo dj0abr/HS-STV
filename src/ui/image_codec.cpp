@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cstdio>
 #include <mutex>
+#include <algorithm>
 namespace mm_sstv {
 namespace {
 // Qt's JPEG plugin reports a synthetic EOI inside a scan as a warning. That is
@@ -52,7 +53,7 @@ QImage decodeReceivedJpeg(const std::vector<std::uint8_t>& bytes, bool complete)
     return reader.read();
 }
 
-PreparedPicture preparePicture(const QImage& original, QSize target) {
+QImage fitPicture(const QImage& original, QSize target) {
     if (original.isNull() || !target.isValid() || target.width() > 4096 || target.height() > 4096)
         throw std::invalid_argument("Ungültiges Bild oder Zielformat");
     QImage canvas(target, QImage::Format_RGB32); canvas.fill(Qt::white);
@@ -61,6 +62,17 @@ PreparedPicture preparePicture(const QImage& original, QSize target) {
         const auto size = original.size().scaled(target, Qt::KeepAspectRatio);
         painter.drawImage(QRect(QPoint((target.width() - size.width()) / 2, (target.height() - size.height()) / 2), size), original);
     }
+    return canvas;
+}
+SstvImage sstvRaster(const QImage& picture) {
+    if (picture.size() != QSize(320, 256)) throw std::invalid_argument("SSTV requires 320 x 256 pixels");
+    const auto rgb = picture.convertToFormat(QImage::Format_RGB888);
+    SstvImage result{};
+    for (unsigned y = 0; y < 256; ++y) std::copy_n(rgb.constScanLine(y), 960, result[y].begin());
+    return result;
+}
+PreparedPicture preparePicture(const QImage& original, QSize target) {
+    const auto canvas = fitPicture(original, target);
     for (int quality = 90; quality >= 20; quality -= 5) {
         QByteArray encoded; QBuffer buffer(&encoded); buffer.open(QIODevice::WriteOnly);
         if (!canvas.save(&buffer, "JPEG", quality)) throw std::runtime_error("JPEG-Kodierung nicht verfügbar");

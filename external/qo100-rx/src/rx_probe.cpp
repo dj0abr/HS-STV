@@ -225,12 +225,14 @@ int main(int argc, char** argv) {
             printf("{\"event\":\"status\",\"audio_seconds\":%.3f,\"locked\":%s,"
                    "\"valid_frames\":%llu,\"recent_frames\":%zu,\"frame_age_s\":%.3f,"
                    "\"header_candidates\":%llu,\"fec_failures\":%llu,\"crc_failures\":%llu,"
+                   "\"fec_corrected_frames\":%llu,\"fec_corrected_bytes\":%llu,"
                    "\"rms_dbfs\":%.2f,\"peak_dbfs\":%.2f,\"pll_hz\":%.3f,"
                    "\"afc_enabled\":%s,\"afc_state\":\"%s\",\"center_hz\":%.3f,"
                    "\"frequency_offset_hz\":%.3f,\"pilot_hz\":%.3f,\"points\":[",
                    samples/rate, locked ? "true" : "false", (unsigned long long)frames,
                    recent_frames.size(), age, (unsigned long long)rx_header_candidates,
                    (unsigned long long)rx_fec_failures, (unsigned long long)rx_crc_failures,
+                   (unsigned long long)rx_fec_corrected_frames, (unsigned long long)rx_fec_corrected_bytes,
                    10*log10(std::max(power/count, 1e-20)), 20*log10(std::max(double(peak),1e-10)),
                    nco_crcf_get_frequency(tracker->nco)*pllRate/(2*M_PI),
                    automatic ? "true" : "false",afc_state,center,center-1500,measured_pilot);

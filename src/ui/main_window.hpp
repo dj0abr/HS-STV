@@ -3,9 +3,11 @@
 #include "mm_sstv/transmitter.hpp"
 #include "image_codec.hpp"
 #include "receiver.hpp"
+#include "received_archive.hpp"
 #include <QMainWindow>
 #include <QSettings>
 #include <optional>
+#include <bitset>
 class QLabel;
 class QPushButton;
 class QComboBox;
@@ -31,28 +33,38 @@ private:
     void chooseImage();
     void restartReceiver();
     void receivedImage(const ReceivedImage& image);
-    void saveReceived();
+    void openReceiveFolder();
+    void archiveSstv();
+    void receivedSstv(const SstvUpdate& update);
+    void showReceiveStatistics(const ReceiveStatus& status);
+    void updateFormats();
     bool deviceAvailable() const;
     Transmitter transmitter_;
     QSettings& settings_;
     Receiver receiver_;
+    ReceivedArchive archive_;
+    bool sstvDirty_ = false;
     std::string inputDevice_;
     std::vector<std::uint8_t> receivedJpeg_;
     QString receivedName_;
+    QImage receivedSstv_;
+    std::bitset<256> receivedRows_;
+    bool receivedPartial_ = false;
     std::size_t previewBytes_ = 0;
     ReceiveMonitor* monitor_ = nullptr;
     ImagePanel* receivePreview_ = nullptr;
     QLabel* receiveStatus_ = nullptr;
     QLabel* receiveInfo_ = nullptr;
+    QLabel* receiveStatistics_ = nullptr;
     QProgressBar* receiveProgress_ = nullptr;
     QTimer* receiveRetry_ = nullptr;
-    QAction* saveReceived_ = nullptr;
     std::vector<AudioDevice> devices_;
     std::string device_;
     unsigned level_ = 35;
     QImage original_;
     QString filename_;
     std::optional<ImageTransmission> image_;
+    std::unique_ptr<SstvImage> sstvImage_;
     ImagePanel* preview_ = nullptr;
     Modulation mode_ = Modulation::Apsk8;
     QComboBox* modes_ = nullptr;

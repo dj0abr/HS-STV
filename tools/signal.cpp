@@ -17,7 +17,7 @@ void word(std::ostream& out, std::uint32_t value, unsigned bytes) {
 int main(int argc, char** argv) {
     try {
         if (argc < 2 || argc > 6) {
-            std::cerr << "Usage: mm-sstv-signal OUTPUT.wav [SECONDS=10] [LEVEL_PERCENT=35] [SEED=1] [8apsk|qpsk4410]\n"; return 2;
+            std::cerr << "Usage: hs-stv-signal OUTPUT.wav [SECONDS=10] [LEVEL_PERCENT=35] [SEED=1] [8apsk|qpsk4410]\n"; return 2;
         }
         const auto number = [](const char* s) {
             std::size_t end; auto result = std::stod(s, &end);

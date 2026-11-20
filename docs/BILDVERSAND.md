@@ -93,5 +93,5 @@ Der aktualisierte PortAudio-Build mit GUI und Bildexport wird unter Linux gebaut
 Windows/macOS sind weiterhin nicht als getestet ausgewiesen. Sämtliche Prüfungen
 verwenden Dateien, simulierte Adapter oder einen privaten PulseAudio-Server.
 Die praktische Abnahme über QO100 und die Anzeige im originalen HS-Modem bleiben
-beim Benutzer; der neue mm-sstv-Prozess wurde dazu nicht automatisch auf Sendung
+beim Benutzer; der neue hs-stv-Prozess wurde dazu nicht automatisch auf Sendung
 geschaltet.

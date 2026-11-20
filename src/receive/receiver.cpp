@@ -20,16 +20,15 @@ Receiver::~Receiver() { stop(); }
 std::vector<AudioDevice> Receiver::devices() { return input_ ? input_->devices() : std::vector<AudioDevice>{}; }
 void Receiver::start(const std::string& device, Modulation mode) {
     stop();
-    const auto sampleRate = parameters(mode).sampleRate; mode_ = mode;
+    const auto sampleRate = modeSampleRate(mode); mode_ = mode;
     if (!input_) throw std::runtime_error("Kein Audioeingang vorhanden");
     if (device.empty()) throw std::runtime_error("Kein Audioeingang gewählt");
+    QString executable = QCoreApplication::applicationDirPath() + (isSstv(mode_) ? "/hs-stv-sstv-rx-core" : "/hs-stv-rx-core");
 #ifdef Q_OS_WIN
-    const QString executable = QCoreApplication::applicationDirPath() + "/mm-sstv-rx-core.exe";
-#else
-    const QString executable = QCoreApplication::applicationDirPath() + "/mm-sstv-rx-core";
+    executable += ".exe";
 #endif
-    if (!QFileInfo(executable).isExecutable()) throw std::runtime_error("Empfangskern mm-sstv-rx-core fehlt. Bitte neu bauen.");
-    lines_.clear(); core_.start(executable, {"--input-rate", QString::number(sampleRate), "--monitor", "--modulation", mode_ == Modulation::Apsk8 ? "8apsk" : "qpsk4410"});
+    if (!QFileInfo(executable).isExecutable()) throw std::runtime_error("Empfangskern hs-stv-rx-core fehlt. Bitte neu bauen.");
+    lines_.clear(); core_.start(executable, {"--input-rate", QString::number(sampleRate), "--monitor", "--modulation", QString::fromLatin1(modeKey(mode_))});
     if (!core_.waitForStarted(1000)) throw std::runtime_error(core_.errorString().toStdString());
     accepting_ = true; active_ = true; stale_ = false; statusAge_.start();
     try {
@@ -85,7 +84,11 @@ void Receiver::readOutput() {
             statusAge_.restart(); stale_ = false;
             ReceiveStatus status; status.modulation = mode_; status.locked = json.value("locked").toBool();
             status.pilot = json.value("pilot_hz").toDouble(-1); status.offset = json.value("frequency_offset_hz").toDouble();
-            status.level = json.value("rms_dbfs").toDouble(-200); status.frames = json.value("valid_frames").toDouble();
+            status.level = json.value("rms_dbfs").toDouble(-200); status.frames = json.value(isSstv(mode_) ? "received_lines" : "valid_frames").toDouble();
+            status.headerCandidates = json.value("header_candidates").toDouble();
+            status.crcFailures = json.value("crc_failures").toDouble(); status.fecFailures = json.value("fec_failures").toDouble();
+            status.fecCorrectedFrames = json.value("fec_corrected_frames").toDouble(); status.fecCorrectedBytes = json.value("fec_corrected_bytes").toDouble();
+            status.syncDetected = json.value("sync_detected").toDouble(); status.syncMissed = json.value("sync_missed").toDouble();
             status.center = json.value("center_hz").toDouble(1500);
             status.spectrumBinHz = json.value("spectrum_bin_hz").toDouble();
             const auto spectrum = json.value("spectrum_dbfs").toArray();
@@ -94,6 +97,20 @@ void Receiver::readOutput() {
                 for (const auto value : spectrum) {
                     const auto db = value.toDouble(-160);
                     status.spectrum.push_back(std::isfinite(db) ? float(db) : -160.f);
+                }
+            }
+            status.waterfallBinHz = json.value("waterfall_bin_hz").toDouble();
+            const auto waterfall = json.value("waterfall_dbfs").toArray();
+            if (isSstv(mode_) && waterfall.size() <= 10 && status.waterfallBinHz > 0 && std::isfinite(status.waterfallBinHz)) {
+                for (const auto value : waterfall) {
+                    const auto bins = value.toArray();
+                    if (bins.isEmpty() || bins.size() > 512) continue;
+                    std::vector<float> row; row.reserve(bins.size());
+                    for (const auto bin : bins) {
+                        const double db = bin.toDouble(-160);
+                        row.push_back(std::isfinite(db) ? float(db) : -160.f);
+                    }
+                    status.waterfall.push_back(std::move(row));
                 }
             }
             const auto points = json.value("points").toArray();
@@ -106,8 +123,21 @@ void Receiver::readOutput() {
                     status.points.push_back({float(x), float(y)});
             }
             const auto state = json.value("afc_state").toString();
-            status.state = status.locked ? "Synchronisiert" : state == "acquiring" ? "Pilot gefunden · synchronisiere" : state == "hold" ? "Nachführung" : "Suche";
+            status.state = isSstv(mode_) ? (status.locked ? "Zeilensynchron" : json.value("receiving").toBool() ? "Bildempfang · warte Zeilensync" : "Suche SSTV") : status.locked ? "Synchronisiert" : state == "acquiring" ? "Pilot gefunden · synchronisiere" : state == "hold" ? "Nachführung" : "Suche";
             if (statusChanged) statusChanged(status);
+        } else if (event.startsWith("sstv_") && isSstv(mode_)) {
+            SstvUpdate update; update.modulation = mode_;
+            if (event == "sstv_begin") { update.kind = SstvUpdate::Kind::Begin; update.partial = json.value("partial").toBool(); }
+            else if (event == "sstv_end") { update.kind = SstvUpdate::Kind::End; update.complete = json.value("complete").toBool(); }
+            else if (event == "sstv_line") {
+                const int row = json.value("index").toInt(-1);
+                const auto hex = json.value("rgb_hex").toString().toLatin1();
+                if (row < 0 || row >= 256 || hex.size() != 1920) continue;
+                const auto rgb = QByteArray::fromHex(hex); if (rgb.size() != 960) continue;
+                update.kind = SstvUpdate::Kind::Line; update.index = unsigned(row); update.synchronized = json.value("synchronized").toBool();
+                std::copy(rgb.begin(), rgb.end(), update.rgb.begin());
+            } else continue;
+            if (sstvReceived) sstvReceived(update);
         } else if (event == "frame") {
             const auto hex = json.value("payload_hex").toString().toLatin1(); if (hex.size() != 438) continue;
             const auto payload = QByteArray::fromHex(hex); if (payload.size() != 219) continue;

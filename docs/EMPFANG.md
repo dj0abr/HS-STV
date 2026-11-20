@@ -25,7 +25,7 @@ Bestätigung durch gültige Frames, kontinuierliche Übernahme langsamer PLL-
 Korrekturen sowie Wiederaufnahme nach Aussetzern. Auch der 500-Hz-Pilot wird
 unterstützt. Die Datenmitte liegt stets 1400 Hz über dem Piloten.
 
-Der Kern läuft als mitgeliefertes Programm `mm-sstv-rx-core`. Das isoliert die
+Der Kern läuft als mitgeliefertes Programm `hs-stv-rx-core`. Das isoliert die
 ursprünglichen statischen RX-Zustände vom Sender. Der Qt-Adapter `Receiver`
 übergibt Mono-Float-Audio bei 48 bzw. 44,1 kHz und verarbeitet die JSON-Frame-/Statusausgabe.
 Die Verbindung benutzt ausschließlich lokale Prozess-Pipes, keine UDP-Ports und
@@ -46,7 +46,7 @@ Vollaussteuerungsnormierung bleiben unverändert.
 
 Unter den Bildern liegen ein natives Qt-Spektrum und das Konstellationsdiagramm des gewählten Modus
 in einer standardmäßig 120 Pixel hohen Leiste.
-Die Prozessbrücke aktiviert dafür `mm-sstv-rx-core --monitor`. Ohne diese Option
+Die Prozessbrücke aktiviert dafür `hs-stv-rx-core --monitor`. Ohne diese Option
 bleibt die bisherige Statusausgabe unverändert. Bereits vorhandene `points` werden
 jetzt als reale, entzerrte I/Q-Symbole dargestellt; bis zu 600 Punkte bilden eine
 kurze Spur. Bestätigte Datensynchronisation färbt die Punkte grün, ansonsten cyan.
@@ -57,7 +57,8 @@ und dessen Pilotsuche ein Hann-Fenster mit 32768 Samples bei der nativen Abtastr
 liquid-dsp, keine zusätzliche Bibliothek und keine Betriebssystem-API.
 Das Eingangsaudio wird vor Downmixer, AFC und AGC analysiert. Die Anzeige wird mit
 den vorhandenen 100-ms-Statusmeldungen aktualisiert, erstmals nach etwa 0,7–0,8 Sekunden.
-Die Auflösung beträgt 1,465 Hz bei 48 kHz bzw. 1,346 Hz bei 44,1 kHz; dargestellt werden 0–4000 Hz und 0 bis −140 dBFS/Bin.
+Die Auflösung beträgt 1,465 Hz bei 48 kHz bzw. 1,346 Hz bei 44,1 kHz; dargestellt werden 0–4000 Hz. Die Anzeigegrenzen sind links einstellbar: unten
+−100 bis −60 dBFS, oben −50 bis 0 dBFS; Standard −90 / −20 dBFS.
 Ein Sinus mit Spitzenamplitude 1 genau auf einem FFT-Bin entspricht 0 dBFS/Bin;
 Fensterverluste bei Zwischenfrequenzen sind möglich. Der Pegel oben rechts ist
 der RMS-Pegel des Eingangs. Die FFT erhält keine automatische Pegelnormierung.
@@ -99,8 +100,10 @@ Die Frame-CRC ist Voraussetzung für die Übernahme eines Blocks. Eine Datei-ID 
 laut Protokoll auch eine beliebige Kennung sein; ältere Sender werden deshalb
 nicht wegen einer abweichenden Inhalts-CRC abgewiesen. Vollständigkeit bedeutet,
 dass sämtliche Blöcke und die angegebene JPEG-Länge vorliegen. Erst ein erfolgreich
-dekodiertes vollständiges Bild kann über „Bild → Empfangsbild speichern…“ gespeichert
-werden. Die originale JPEG-Datei wird mit QSaveFile atomar abgelegt.
+dekodiertes vollständiges Bild wird automatisch als originale JPEG-Datei mit
+QSaveFile atomar in **rxpic** unter dem Arbeitsverzeichnis abgelegt. Eindeutige
+Dateinamen verhindern Überschreiben. „Bild → Empfangsordner öffnen“ öffnet den Ordner
+im Standard-Dateimanager. Der Startskript setzt das Arbeitsverzeichnis auf den Projektordner.
 
 ## Bedienung
 
@@ -173,3 +176,28 @@ Windows-/macOS-Lauf ist weiterhin nicht getestet. Die Prüfungen nutzen Dateien,
 simulierte Quellen oder einen privaten Audioserver. Der Benutzer hat auch den praktischen Bildempfang über
 QO100 bestätigt; die Monitor-Erweiterung wurde mit simuliertem Eingang geprüft. Das originale HS-Modem- und das QO100_TRX2-
 Projekt wurden nicht verändert.
+
+## Empfangsdiagnostik
+
+Eine separate kompakte RX-Zeile hält AFC und Empfangsstatistik sichtbar.
+Nach einem vollständig dekodierten Bild lautet die Bildstatuszeile
+**Empfang abgeschlossen**; Dateiname und Speicherpfad stehen im Tooltip.
+
+Digitale Zähler gelten seit dem Start des Empfangskerns bzw. Eingangs- oder
+Moduswechsel: gültige Frames, CRC-Fehler nach FEC, mit FEC reparierte gültige
+Frames und verworfene FEC-Kandidaten. Der Tooltip nennt außerdem korrigierte
+RS-Bytes einschließlich Parität sowie die Zahl erkannter Headerkandidaten.
+Der bestehende Schifra-Wert `errors_corrected` wird ausgewertet; als repariert
+zählt ein Frame erst nach erfolgreicher CRC. Die Decodierung bleibt unverändert.
+
+FEC-Verwerfungen sind **keine verlässliche Zahl verlorener Bildblöcke**: Auch
+falsche Headerkandidaten beim Suchen oder bei Rauschen werden vom RS-Decoder
+verworfen. Die Anzeige und ihr Tooltip unterscheiden diese Kandidaten von
+CRC-bestätigten Frames und erfolgreichen Reparaturen.
+
+Bei SSTV gelten die Zähler für das aktuelle/letzte Bild. Dargestellte Zeilen ohne
+bestätigten Sync und übersprungene Zeilen zählen als nicht erkannt. Nach einem
+Bild mit VIS werden am Ende alle 256 erwarteten Zeilensyncs berücksichtigt;
+bei späterem Einstieg ohne VIS nur die seit Einstieg ausgewerteten Zeilen.
+Tests prüfen RS-Reparaturen von 1, 3 und 16 Bytes, nicht reparierbare Blöcke,
+CRC-Ablehnung nach RS-Reparatur sowie SSTV mit acht entfernten Sync-Impulsen.

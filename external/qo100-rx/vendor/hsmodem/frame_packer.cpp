@@ -34,6 +34,7 @@ uint8_t rx_status = 0;
 int lastframenum = 0;
 int getPayload_error = 0;
 uint64_t rx_header_candidates = 0, rx_fec_failures = 0, rx_crc_failures = 0;
+uint64_t rx_fec_corrected_frames = 0, rx_fec_corrected_bytes = 0;
 
 // header for TX, 
 uint8_t TXheaderbytes[HEADERLEN] = {0x53, 0xe1, 0xa6};
@@ -289,6 +290,12 @@ uint8_t *getPayload(uint8_t *rxb)
         getPayload_error = 2;
         ++rx_crc_failures;
         return NULL;    // no data found
+    }
+    // Count actual repairs only after the frame also passes CRC. False header
+    // candidates and RS miscorrections must not look like recovered data.
+    if (rx_last_fec_corrected) {
+        ++rx_fec_corrected_frames;
+        rx_fec_corrected_bytes += rx_last_fec_corrected;
     }
     //printf("crc OK\n");
     

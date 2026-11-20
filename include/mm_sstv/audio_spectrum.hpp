@@ -9,7 +9,8 @@ class AudioSpectrum final {
 public:
     static constexpr std::size_t fftSize = 32768;
     static constexpr double binHz = 48000.0 / fftSize;
-    explicit AudioSpectrum(unsigned sampleRate = 48000);
+    // Smaller transforms provide the short analysis windows needed by SSTV sync pulses.
+    explicit AudioSpectrum(unsigned sampleRate = 48000, std::size_t transformSize = fftSize);
     double frequencyStep() const;
     ~AudioSpectrum();
     AudioSpectrum(const AudioSpectrum&) = delete;

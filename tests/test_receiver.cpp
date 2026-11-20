@@ -69,6 +69,8 @@ int main(int argc, char** argv) {
         rx.statusChanged = [&](const ReceiveStatus& status) {
             if (status.modulation != mode) throw std::runtime_error("Wrong RX mode");
             locked |= status.locked;
+            if (status.fecCorrectedFrames > status.frames || status.fecCorrectedBytes < status.fecCorrectedFrames || status.headerCandidates < status.frames)
+                throw std::runtime_error("Inconsistent CRC/FEC diagnostics in receiver bridge");
             pointsSeen |= status.locked && status.points.size() >= 40;
             if (status.spectrum.size() > 2700 && status.spectrumBinHz > 1 && status.spectrumBinHz < 2) {
                 spectrumSeen = true;

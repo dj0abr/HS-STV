@@ -61,8 +61,11 @@ typedef schifra::reed_solomon::decoder<code_length,fec_length,data_length> decod
 
 
 
+unsigned rx_last_fec_corrected = 0;
+
 int cfec_Reconstruct(uint8_t *darr, uint8_t *destination)
 {
+   rx_last_fec_corrected = 0;
 schifra::reed_solomon::block<code_length,fec_length> rxblock;
 
    for(std::size_t i=0; i<code_length; i++)
@@ -74,6 +77,8 @@ schifra::reed_solomon::block<code_length,fec_length> rxblock;
       // FEC decoding not possible
       return 0;
    }
+
+   rx_last_fec_corrected = static_cast<unsigned>(rxblock.errors_corrected);
 
    for(std::size_t i=0; i<data_length; i++)
        destination[i] = rxblock[i];

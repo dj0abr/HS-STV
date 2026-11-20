@@ -3,9 +3,10 @@
 #include "image_panel.hpp"
 #include "receive_monitor.hpp"
 #include <QFileDialog>
+#include <QDateTime>
 #include <QFileInfo>
-#include <QSaveFile>
-#include <QStandardPaths>
+#include <QDesktopServices>
+#include <QUrl>
 #include <QImageReader>
 #include <QProgressBar>
 #include <QAction>
@@ -61,8 +62,10 @@ private:
 }
 MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings, std::unique_ptr<AudioInput> input)
     : transmitter_(std::move(output)), settings_(settings), receiver_(std::move(input)) {
-    setWindowTitle("mm-sstv · Bilder senden und empfangen"); setMinimumSize(640, 440);
-    mode_ = settings_.value("modem/modulation", "8apsk").toString() == "qpsk4410" ? Modulation::Qpsk4410 : Modulation::Apsk8;
+    setWindowTitle("HS-STV · Bilder senden und empfangen"); setMinimumSize(640, 440);
+    const auto savedMode = settings_.value("modem/modulation", "8apsk").toString();
+    for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410, Modulation::Martin1, Modulation::Martin2, Modulation::Scottie1, Modulation::Scottie2})
+        if (savedMode == modeKey(mode)) mode_ = mode;
     inputDevice_ = settings_.value("audio/input", "fromQO100").toString().toStdString();
     device_ = settings_.value("audio/output", "toQO100").toString().toStdString();
     level_ = std::clamp(settings_.value("audio/level", 35).toInt(), 0, 100);
@@ -70,10 +73,10 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     auto* file = menuBar()->addMenu("Bild");
     open_ = file->addAction("Bild öffnen…"); open_->setObjectName("openImage");
     connect(open_, &QAction::triggered, this, [this] { chooseImage(); });
-    saveReceived_ = file->addAction("Empfangsbild speichern…"); saveReceived_->setObjectName("saveReceived"); saveReceived_->setEnabled(false);
-    connect(saveReceived_, &QAction::triggered, this, [this] { saveReceived(); });
+    auto* folder = file->addAction("Empfangsordner öffnen"); folder->setObjectName("openReceiveFolder");
+    connect(folder, &QAction::triggered, this, [this] { openReceiveFolder(); });
     auto* menu = menuBar()->addMenu("Setup");
-    auto* audio = menu->addAction("Audioausgang und Pegel…"); audio->setObjectName("audioSetup");
+    auto* audio = menu->addAction("Soundkarten…"); audio->setObjectName("audioSetup");
     connect(audio, &QAction::triggered, this, [this] { setup(); });
     auto* central = new QWidget(this); auto* layout = new QVBoxLayout(central);
     layout->setContentsMargins(6, 6, 6, 6); layout->setSpacing(6);
@@ -83,12 +86,10 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     auto* title = new QLabel("Sendebild", central); auto titleFont = title->font(); titleFont.setBold(true); title->setFont(titleFont);
     sendHeader->addWidget(title);
     sizes_ = new QComboBox(central); sizes_->setObjectName("imageSize"); sizes_->setToolTip("Bildgröße der übertragenen JPEG-Datei; die Vorschau passt sich dem Fenster an.");
-    for (const auto size : {QSize(320, 240), QSize(640, 480), QSize(800, 600), QSize(1024, 768)})
-        sizes_->addItem(QString("%1 × %2").arg(size.width()).arg(size.height()), size);
-    sizes_->setCurrentIndex(std::clamp(settings_.value("image/sizeIndex", 1).toInt(), 0, 3));
     sendHeader->addWidget(sizes_);
     connect(sizes_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
-        settings_.setValue("image/sizeIndex", index); prepare();
+        if (!isSstv(mode_)) settings_.setValue("image/sizeIndex", index);
+        prepare();
     });
     start_ = new QPushButton("Senden", central); start_->setObjectName("transmitButton"); start_->setMinimumWidth(80);
     auto buttonFont = start_->font(); buttonFont.setBold(true); start_->setFont(buttonFont); sendHeader->addWidget(start_); sendHeader->addStretch();
@@ -101,7 +102,23 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     preview_->clicked = [this] { chooseImage(); };
     preview_->dropped = [this](const QString& path) { loadImage(path); };
     receivePreview_ = new ImagePanel(central, false); receivePreview_->setObjectName("receivedPreview");
-    panes->addWidget(preview_, 1, 0); panes->addWidget(receivePreview_, 1, 1);
+    auto* txPane = new QHBoxLayout; txPane->setContentsMargins(0, 0, 0, 0); txPane->setSpacing(4);
+    txPane->addWidget(preview_, 1);
+    auto* levelControl = new QWidget(central); levelControl->setObjectName("transmitLevelControl");
+    auto* levelColumn = new QVBoxLayout(levelControl); levelColumn->setContentsMargins(0, 0, 0, 0); levelColumn->setSpacing(2);
+    auto* levelTitle = new QLabel("Pegel", levelControl); levelTitle->setAlignment(Qt::AlignCenter);
+    auto* slider = new QSlider(Qt::Vertical, levelControl); slider->setObjectName("outputLevel"); slider->setAccessibleName("Sendepegel");
+    slider->setRange(0, 100); slider->setValue(level_);
+    slider->setToolTip("Sendepegel 0–100 % · auch während einer Sendung einstellbar");
+    auto* percent = new QLabel(QString::number(level_) + " %", levelControl); percent->setObjectName("outputLevelValue"); percent->setAlignment(Qt::AlignCenter);
+    levelControl->setFixedWidth(std::max(percent->fontMetrics().horizontalAdvance("100 %"), levelTitle->sizeHint().width()) + 6);
+    levelColumn->addWidget(levelTitle); levelColumn->addWidget(slider, 1, Qt::AlignHCenter); levelColumn->addWidget(percent);
+    txPane->addWidget(levelControl); panes->addLayout(txPane, 1, 0); panes->addWidget(receivePreview_, 1, 1);
+    connect(slider, &QSlider::valueChanged, this, [this, percent](int value) {
+        level_ = static_cast<unsigned>(value); transmitter_.setLevel(level_);
+        percent->setText(QString::number(value) + " %"); settings_.setValue("audio/level", value);
+        if (!transmitter_.running()) showReady();
+    });
     imageInfo_ = new CompactLabel(central); imageInfo_->setObjectName("imageInfo"); panes->addWidget(imageInfo_, 2, 0);
     receiveInfo_ = new CompactLabel(central); receiveInfo_->setObjectName("receiveInfo"); panes->addWidget(receiveInfo_, 2, 1);
     progress_ = new QProgressBar(central); progress_->setObjectName("sendProgress"); progress_->setValue(0); progress_->setFormat("TX %p%");
@@ -114,19 +131,50 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     styleProgress(progress_, "#e76969"); styleProgress(receiveProgress_, "#5ab875");
     panes->addWidget(progress_, 3, 0); panes->addWidget(receiveProgress_, 3, 1);
     layout->addLayout(panes, 1);
-    monitor_ = new ReceiveMonitor(central); monitor_->clear("Warte auf Audiodaten", mode_); layout->addWidget(monitor_);
+    receiveStatistics_ = new CompactLabel(central, Qt::ElideRight); receiveStatistics_->setObjectName("receiveStatistics");
+    auto statisticsFont = receiveStatistics_->font(); statisticsFont.setPointSizeF(9); receiveStatistics_->setFont(statisticsFont);
+    receiveStatistics_->setText("RX · Warte auf Audiodaten"); layout->addWidget(receiveStatistics_);
+    monitor_ = new ReceiveMonitor(central); monitor_->clear("Warte auf Audiodaten", mode_);
+    auto* monitorRow = new QHBoxLayout; monitorRow->setSpacing(4); monitorRow->setContentsMargins(0, 0, 0, 0);
+    const auto addRangeControl = [&](const QString& title, const QString& name, int minimum, int maximum, int value, const QString& help) {
+        auto* control = new QWidget(central); control->setToolTip(help);
+        auto* column = new QVBoxLayout(control); column->setContentsMargins(0, 0, 0, 0); column->setSpacing(2);
+        auto* caption = new QLabel(title, control); caption->setAlignment(Qt::AlignCenter);
+        auto* number = new QLabel(QString::number(value), control); number->setObjectName(name + "Value"); number->setAlignment(Qt::AlignCenter);
+        auto font = caption->font(); font.setPointSizeF(8); caption->setFont(font); number->setFont(font);
+        control->setFixedWidth(std::max(number->fontMetrics().horizontalAdvance("−100"), caption->sizeHint().width()) + 6);
+        auto* range = new QSlider(Qt::Vertical, control); range->setObjectName(name); range->setAccessibleName(help); range->setToolTip(help);
+        range->setRange(minimum, maximum); range->setValue(value);
+        column->addWidget(caption); column->addWidget(range, 1, Qt::AlignHCenter); column->addWidget(number);
+        connect(range, &QSlider::valueChanged, this, [number](int db) { number->setText(QString::number(db)); });
+        monitorRow->addWidget(control); return range;
+    };
+    auto* lower = addRangeControl("Min", "spectrumMin", -100, -60,
+        std::clamp(settings_.value("display/minDb", -90).toInt(), -100, -60), "Untere Grenze für Spektrum und Wasserfall: −100 bis −60 dBFS");
+    auto* upper = addRangeControl("Max", "spectrumMax", -50, 0,
+        std::clamp(settings_.value("display/maxDb", -20).toInt(), -50, 0), "Obere Grenze für Spektrum und Wasserfall: −50 bis 0 dBFS");
+    monitor_->setDbRange(lower->value(), upper->value());
+    const auto updateRange = [this, lower, upper] {
+        monitor_->setDbRange(lower->value(), upper->value());
+        settings_.setValue("display/minDb", lower->value()); settings_.setValue("display/maxDb", upper->value());
+    };
+    connect(lower, &QSlider::valueChanged, this, updateRange); connect(upper, &QSlider::valueChanged, this, updateRange);
+    updateRange(); // Persist clamped values after changing the permitted range.
+    monitorRow->addWidget(monitor_, 1); layout->addLayout(monitorRow);
     auto* footer = new QHBoxLayout; footer->setSpacing(8);
     status_ = new CompactLabel(central, Qt::ElideRight); status_->setObjectName("statusText"); footer->addWidget(status_, 1);
     modes_ = new QComboBox(central); modes_->setObjectName("modulation");
-    for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410})
-        modes_->addItem(QString("%1 · %2 bit/s").arg(modulationName(mode)).arg(parameters(mode).bitRate()), int(mode));
-    modes_->setCurrentIndex(mode_ == Modulation::Apsk8 ? 0 : 1);
-    modes_->setToolTip("Modulation für Senden und Empfang; beide Stationen gleich einstellen.\n8APSK 6000 oder QPSK 4410 für schwächere Signale, jeweils HS-Modem-kompatibel.\nSendereferenzträger 100 Hz.");
+    for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410, Modulation::Martin1, Modulation::Martin2, Modulation::Scottie1, Modulation::Scottie2})
+        modes_->addItem(isSstv(mode) ? QString("SSTV %1").arg(modulationName(mode)) :
+            QString("%1 · %2 bit/s").arg(modulationName(mode)).arg(parameters(mode).bitRate()), int(mode));
+    modes_->setCurrentIndex(modes_->findData(int(mode_)));
+    modes_->setToolTip("Modus für Senden und Empfang; beide Stationen gleich einstellen.\n8APSK/QPSK: HS-Modem-kompatibel mit 100-Hz-Referenzträger.\nSSTV Martin 1/2 und Scottie 1/2: 320 × 256 Pixel, Sync 1200 Hz, Bildsignal 1500–2300 Hz.");
+    updateFormats();
     footer->addWidget(modes_); layout->addLayout(footer);
     connect(modes_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
         mode_ = static_cast<Modulation>(modes_->currentData().toInt());
-        settings_.setValue("modem/modulation", mode_ == Modulation::Apsk8 ? "8apsk" : "qpsk4410");
-        prepare(); restartReceiver();
+        settings_.setValue("modem/modulation", modeKey(mode_));
+        updateFormats(); prepare(); restartReceiver();
     });
     setCentralWidget(central);
     QSize initialSize(900, 560);
@@ -138,32 +186,35 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     receiveRetry_ = new QTimer(this); receiveRetry_->setSingleShot(true); receiveRetry_->setInterval(3000);
     connect(receiveRetry_, &QTimer::timeout, this, [this] { restartReceiver(); });
     settings_.remove("receive/enabled"); // Migrate the obsolete manual-pause preference.
+    receiver_.sstvReceived = [this](const SstvUpdate& update) { receivedSstv(update); };
     receiver_.imageReceived = [this](const ReceivedImage& image) { receivedImage(image); };
     receiver_.statusChanged = [this](const ReceiveStatus& status) {
-        monitor_->setStatus(status);
+        monitor_->setStatus(status); showReceiveStatistics(status);
         QString details = status.state;
         if (status.pilot >= 0) details += QString(" · Pilot %1 Hz").arg(status.pilot, 0, 'f', 1);
-        if (status.frames) details += QString(" · AFC %1 Hz · %2 gültige Frames").arg(status.offset, 0, 'f', 1).arg(qulonglong(status.frames));
+        if (status.frames) details += QString(isSstv(status.modulation) ? " · AFC %1 Hz · %2 Bildzeilen" : " · AFC %1 Hz · %2 gültige Frames").arg(status.offset, 0, 'f', 1).arg(qulonglong(status.frames));
         QString text = status.locked ? "Sync" : status.state;
-        if (status.frames) text += QString(" · AFC %1 Hz").arg(status.offset, 0, 'f', 1);
         receiveStatus_->setText(text); receiveStatus_->setToolTip(details);
     };
     receiver_.failed = [this](const QString& text) {
+        archiveSstv();
         monitor_->clear("Empfang unterbrochen", mode_); receiveStatus_->setToolTip({});
         receiveStatus_->setText(text); receiveRetry_->start();
     };
     refreshDevices();
+    try { archive_.ensureDirectory(); }
+    catch (const std::exception& e) { receiveInfo_->setText(QString::fromUtf8(e.what())); }
     if (receiver_.available()) QTimer::singleShot(0, this, [this] { restartReceiver(); });
 }
-MainWindow::~MainWindow() { receiveRetry_->stop(); transmitter_.stop(); receiver_.stop(); }
+MainWindow::~MainWindow() { receiveRetry_->stop(); transmitter_.stop(); receiver_.stop(); archiveSstv(); }
 bool MainWindow::deviceAvailable() const {
     return std::any_of(devices_.begin(), devices_.end(), [this](const auto& d) { return d.id == device_; });
 }
 void MainWindow::updateButton() {
     const bool running = transmitter_.running();
     start_->setText(running ? "STOP" : "Senden");
-    start_->setEnabled(running || (deviceAvailable() && image_.has_value()));
-    modes_->setEnabled(!running); sizes_->setEnabled(!running); preview_->setEditable(!running); open_->setEnabled(!running);
+    start_->setEnabled(running || (deviceAvailable() && (image_.has_value() || bool(sstvImage_))));
+    modes_->setEnabled(!running); sizes_->setEnabled(!running && !isSstv(mode_)); preview_->setEditable(!running); open_->setEnabled(!running);
 }
 void MainWindow::showReady() {
     if (deviceAvailable()) status_->setText("Bereit · " + QString::fromStdString(device_) + " · " + QString::number(level_) + " %");
@@ -177,8 +228,14 @@ void MainWindow::refreshDevices() {
 void MainWindow::toggle() {
     if (transmitter_.running()) { transmitter_.stop(); showReady(); return; }
     try {
-        if (!image_) return;
-        transmitter_.startImage(device_, *image_); progress_->setValue(0); updateButton();
+        if (isSstv(mode_)) {
+            if (!sstvImage_) return;
+            transmitter_.startSstv(device_, mode_, *sstvImage_);
+        } else {
+            if (!image_) return;
+            transmitter_.startImage(device_, *image_);
+        }
+        progress_->setValue(0); updateButton();
         status_->setText("Sendet Bild · " + QString::fromStdString(device_));
     } catch (const std::exception& e) {
         updateButton(); status_->setText("Start fehlgeschlagen: " + QString::fromUtf8(e.what()));
@@ -211,12 +268,18 @@ bool MainWindow::loadImage(const QString& filename) {
     const auto image = reader.read();
     if (image.isNull()) { status_->setText("Bild konnte nicht geladen werden: " + reader.errorString()); return false; }
     original_ = image; filename_ = QFileInfo(filename).fileName();
-    settings_.setValue("image/directory", QFileInfo(filename).absolutePath()); prepare(); return image_.has_value();
+    settings_.setValue("image/directory", QFileInfo(filename).absolutePath()); prepare(); return image_.has_value() || bool(sstvImage_);
 }
 void MainWindow::prepare() {
-    image_.reset(); progress_->setValue(0);
+    image_.reset(); sstvImage_.reset(); progress_->setValue(0);
     if (original_.isNull()) { updateButton(); return; }
     try {
+        if (isSstv(mode_)) {
+            const auto picture = fitPicture(original_, QSize(320, 256));
+            sstvImage_ = std::make_unique<SstvImage>(sstvRaster(picture)); preview_->setImage(picture);
+            imageInfo_->setText(QString("%1 · 320 × 256 · %2 s").arg(filename_).arg(sstvImageSamples(mode_) / 48000., 0, 'f', 1));
+            showReady(); return;
+        }
         const auto picture = preparePicture(original_, sizes_->currentData().toSize());
         image_ = prepareImage(picture.jpeg, filename_.toUtf8().toStdString(), mode_); preview_->setImage(picture.preview);
         const auto seconds = (image_->audioFrames() + parameters(mode_).sampleRate - 1) / parameters(mode_).sampleRate;
@@ -227,6 +290,7 @@ void MainWindow::prepare() {
     } catch (const std::exception& e) { imageInfo_->clear(); status_->setText(QString::fromUtf8(e.what())); updateButton(); }
 }
 void MainWindow::restartReceiver() {
+    archiveSstv();
     monitor_->clear("Warte auf Audiodaten", mode_); receiveStatus_->setToolTip({});
     receiveRetry_->stop();
     if (!receiver_.available()) { receiveStatus_->setText("Kein Audioeingang"); return; }
@@ -237,27 +301,87 @@ void MainWindow::restartReceiver() {
 }
 void MainWindow::receivedImage(const ReceivedImage& image) {
     if (image.newImage) {
-        receivedJpeg_.clear(); saveReceived_->setEnabled(false); previewBytes_ = 0; receivePreview_->setImage({});
+        archiveSstv(); receivedSstv_ = {}; receivedRows_.reset(); receivedJpeg_.clear(); previewBytes_ = 0; receivePreview_->setImage({});
     }
     receivedName_ = QString::fromStdString(image.filename);
     receiveProgress_->setValue(static_cast<int>(image.blocks * 100 / image.totalBlocks));
-    receiveInfo_->setText(QString("%1 · %2/%3 Blöcke%4").arg(receivedName_).arg(image.blocks).arg(image.totalBlocks)
-        .arg(image.complete ? " · vollständig" : ""));
+    receiveInfo_->setText(QString("%1 · %2/%3 Blöcke").arg(receivedName_).arg(image.blocks).arg(image.totalBlocks));
     if (image.jpeg.size() <= previewBytes_ && !image.complete) return;
     const auto picture = decodeReceivedJpeg(image.jpeg, image.complete);
     if (!picture.isNull()) {
         receivePreview_->setImage(picture); previewBytes_ = image.jpeg.size();
-        if (image.complete) { receivedJpeg_ = image.jpeg; saveReceived_->setEnabled(true); }
+        if (image.complete) {
+            receivedJpeg_ = image.jpeg; receiveInfo_->setText("Empfang abgeschlossen");
+            try { receiveInfo_->setToolTip("Automatisch gespeichert: " + archive_.saveJpeg(receivedName_, receivedJpeg_)); }
+            catch (const std::exception& e) { receiveInfo_->setText(QString::fromUtf8(e.what())); }
+        }
     } else if (image.complete) receiveInfo_->setText(receivedName_ + " · Blöcke vollständig, JPEG nicht darstellbar");
 }
-void MainWindow::saveReceived() {
-    if (receivedJpeg_.empty()) return;
-    const auto initial = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation) + "/" + receivedName_;
-    const auto filename = QFileDialog::getSaveFileName(this, "Empfangsbild speichern", initial, "JPEG (*.jpg *.jpeg)");
-    if (filename.isEmpty()) return;
-    QSaveFile file(filename);
-    if (!file.open(QIODevice::WriteOnly) || file.write(reinterpret_cast<const char*>(receivedJpeg_.data()), receivedJpeg_.size()) != qint64(receivedJpeg_.size()) || !file.commit())
-        receiveInfo_->setText("Bild konnte nicht gespeichert werden: " + file.errorString());
+void MainWindow::updateFormats() {
+    const QSignalBlocker blocker(sizes_); sizes_->clear();
+    if (isSstv(mode_)) {
+        sizes_->addItem("320 × 256", QSize(320, 256));
+        sizes_->setToolTip("Alle SSTV-Modi verwenden fest 320 × 256 Pixel.");
+    } else {
+        for (const auto size : {QSize(320, 240), QSize(640, 480), QSize(800, 600), QSize(1024, 768)})
+            sizes_->addItem(QString("%1 × %2").arg(size.width()).arg(size.height()), size);
+        sizes_->setCurrentIndex(std::clamp(settings_.value("image/sizeIndex", 1).toInt(), 0, 3));
+        sizes_->setToolTip("Bildgröße der übertragenen JPEG-Datei; die Vorschau passt sich dem Fenster an.");
+    }
+    sizes_->setEnabled(!isSstv(mode_));
+}
+void MainWindow::receivedSstv(const SstvUpdate& update) {
+    if (update.kind == SstvUpdate::Kind::Begin) {
+        archiveSstv();
+        receivedJpeg_.clear(); receivedRows_.reset(); receivedPartial_ = update.partial;
+        receivedSstv_ = QImage(320, 256, QImage::Format_RGB888); receivedSstv_.fill(Qt::black);
+        receivedName_ = QString("SSTV_%1_%2.png").arg(modeKey(update.modulation), QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
+        sstvDirty_ = false; receiveProgress_->setValue(0); receivePreview_->setImage(receivedSstv_);
+    } else if (update.kind == SstvUpdate::Kind::Line) {
+        if (receivedSstv_.isNull() || update.index >= 256) return;
+        std::copy(update.rgb.begin(), update.rgb.end(), receivedSstv_.scanLine(int(update.index)));
+        receivedRows_.set(update.index); sstvDirty_ = true; receivePreview_->setImage(receivedSstv_);
+        receiveProgress_->setValue(int(receivedRows_.count() * 100 / 256));
+    }
+    const bool complete = update.kind == SstvUpdate::Kind::End && update.complete && !receivedPartial_ && receivedRows_.all();
+    receiveInfo_->setText(complete ? QStringLiteral("Empfang abgeschlossen") : QString("%1 · %2/256%3").arg(modulationName(update.modulation)).arg(receivedRows_.count())
+        .arg(update.kind == SstvUpdate::Kind::End ? " · unvollständig" : receivedPartial_ ? " · Teilempfang" : ""));
+    if (update.kind == SstvUpdate::Kind::End) archiveSstv();
+}
+void MainWindow::showReceiveStatistics(const ReceiveStatus& status) {
+    if (isSstv(status.modulation)) {
+        receiveStatistics_->setText(QString("RX · AFC %1 Hz · Sync erkannt %2 · nicht erkannt %3")
+            .arg(status.offset, 0, 'f', 1).arg(qulonglong(status.syncDetected)).arg(qulonglong(status.syncMissed)));
+        receiveStatistics_->setToolTip("Zeilensyncs des aktuellen/letzten SSTV-Bildes.\n"
+            "Ohne passenden Sync dargestellte oder übersprungene Zeilen zählen als nicht erkannt.\n"
+            "Bei VIS-Empfang werden am Bildende alle 256 erwarteten Zeilensyncs berücksichtigt;\n"
+            "beim Teileinstieg ohne VIS nur die seit dem Einstieg ausgewerteten Zeilen.");
+    } else {
+        receiveStatistics_->setText(QString("RX · AFC %1 Hz · OK %2 · CRC %3 · FEC korr. %4 · FEC verw. %5")
+            .arg(status.offset, 0, 'f', 1).arg(qulonglong(status.frames)).arg(qulonglong(status.crcFailures))
+            .arg(qulonglong(status.fecCorrectedFrames)).arg(qulonglong(status.fecFailures)));
+        receiveStatistics_->setToolTip(QString("Seit dem Start des Empfangs bzw. Eingangs-/Moduswechsel:\n"
+            "Gültige Frames: %1\nCRC-Fehler nach FEC: %2\nFEC-korrigierte gültige Frames: %3\n"
+            "Korrigierte RS-Bytes (einschließlich Paritätsbytes): %4\nNicht dekodierbare FEC-Kandidaten: %5\n"
+            "Headerkandidaten insgesamt: %6\n"
+            "FEC verw. zählt auch falsche Headerkandidaten bei Suche/Rauschen und ist keine sichere Zahl verlorener Bildblöcke.")
+            .arg(qulonglong(status.frames)).arg(qulonglong(status.crcFailures)).arg(qulonglong(status.fecCorrectedFrames))
+            .arg(qulonglong(status.fecCorrectedBytes)).arg(qulonglong(status.fecFailures)).arg(qulonglong(status.headerCandidates)));
+    }
+}
+void MainWindow::archiveSstv() {
+    if (!sstvDirty_ || receivedSstv_.isNull() || receivedRows_.none()) return;
+    try {
+        receiveInfo_->setToolTip("Automatisch gespeichert: " + archive_.savePng(receivedName_, receivedSstv_));
+        sstvDirty_ = false;
+    } catch (const std::exception& e) { receiveInfo_->setText(QString::fromUtf8(e.what())); }
+}
+void MainWindow::openReceiveFolder() {
+    try {
+        archive_.ensureDirectory();
+        if (!QDesktopServices::openUrl(QUrl::fromLocalFile(archive_.directory())))
+            receiveInfo_->setText("Empfangsordner konnte nicht geöffnet werden: " + archive_.directory());
+    } catch (const std::exception& e) { receiveInfo_->setText(QString::fromUtf8(e.what())); }
 }
 void MainWindow::setup() {
     if (!transmitter_.running()) refreshDevices();
@@ -297,14 +421,11 @@ void MainWindow::setup() {
     };
     populate();
     const bool running = transmitter_.running(); outputs->setEnabled(!running); refresh->setEnabled(!running);
-    auto* sliderRow = new QHBoxLayout;
-    auto* slider = new QSlider(Qt::Horizontal, &dialog); slider->setObjectName("outputLevel");
-    slider->setRange(0, 100); slider->setValue(level_);
-    auto* percent = new QLabel(QString::number(level_) + " %", &dialog); percent->setMinimumWidth(45);
-    sliderRow->addWidget(slider, 1); sliderRow->addWidget(percent); form->addRow("Sendepegel", sliderRow);
     layout->addLayout(form);
-    auto* info = new QLabel(QString("%1 kHz · Mono · %2 %3 bit/s\n100 % = digitale Vollaussteuerung.\nDaten und %4-Hz-Referenzträger werden gemeinsam geregelt.")
-        .arg(parameters(mode_).sampleRate / 1000., 0, 'f', 1).arg(modulationName(mode_)).arg(parameters(mode_).bitRate()).arg(TxModulator::pilotHz), &dialog);
+    const auto description = isSstv(mode_) ? QString("48 kHz · Mono · SSTV %1 · 320 × 256 Pixel\n100 % = angepasster SSTV-Maximalpegel (−12,5 dBFS Spitze).\nSync 1200 Hz · Bildsignal 1500–2300 Hz.").arg(modulationName(mode_)) :
+        QString("%1 kHz · Mono · %2 %3 bit/s\n100 % = digitale Vollaussteuerung.\nDaten und %4-Hz-Referenzträger werden gemeinsam geregelt.")
+        .arg(parameters(mode_).sampleRate / 1000., 0, 'f', 1).arg(modulationName(mode_)).arg(parameters(mode_).bitRate()).arg(TxModulator::pilotHz);
+    auto* info = new QLabel(description, &dialog);
     info->setWordWrap(true); layout->addWidget(info);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog); layout->addWidget(buttons);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
@@ -318,11 +439,6 @@ void MainWindow::setup() {
         if (index < 0) return;
         inputDevice_ = inputs->itemData(index).toString().toStdString(); settings_.setValue("audio/input", QString::fromStdString(inputDevice_));
         restartReceiver();
-    });
-    connect(slider, &QSlider::valueChanged, &dialog, [&](int value) {
-        level_ = static_cast<unsigned>(value); transmitter_.setLevel(level_);
-        percent->setText(QString::number(value) + " %"); settings_.setValue("audio/level", value);
-        if (!transmitter_.running()) showReady();
     });
     dialog.exec(); settings_.sync();
 }

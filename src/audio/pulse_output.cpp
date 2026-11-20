@@ -30,7 +30,7 @@ public:
             if (std::none_of(available.begin(), available.end(), [&](const auto& d) { return d.id == device; }))
                 throw std::runtime_error("Audioausgang nicht verfügbar: " + device);
             const pa_sample_spec format{PA_SAMPLE_FLOAT32NE, sampleRate, 1};
-            const std::string streamName = "mm-sstv Bildsendung";
+            const std::string streamName = "hs-stv Bildsendung";
             stream_ = pa_stream_new(connection_->context, streamName.c_str(), &format, nullptr);
             if (!stream_) connection_->fail();
             pa_stream_set_write_callback(stream_, write, this);

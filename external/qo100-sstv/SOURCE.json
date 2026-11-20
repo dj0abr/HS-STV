@@ -1,0 +1,41 @@
+{
+  "source_project": "/Daten/funk/sat/QO100_TRX2",
+  "revision": "7af11b830ba83b7d497a89ca3f1492008b212cd9",
+  "files": [
+    {
+      "source": "decoder/sstv/sstv.hpp",
+      "path": "sstv/sstv.hpp",
+      "sha256": "8c8c224e50daa7c4c2739d16b8499f796e5fc252b3933c05ff46413293c1019c"
+    },
+    {
+      "source": "decoder/sstv/timing.hpp",
+      "path": "sstv/timing.hpp",
+      "sha256": "29b9f5bd414af990d17945d246f0208b48d8f7f904f3ed4e80478b08a3d03193"
+    },
+    {
+      "source": "decoder/sstv/encoder.cpp",
+      "path": "sstv/encoder.cpp",
+      "sha256": "889e19940769dcabae1841260122ed4c713517a804d1eae309477b4646134124"
+    },
+    {
+      "source": "decoder/sstv/decoder.cpp",
+      "path": "sstv/decoder.cpp",
+      "sha256": "4e69ed1d3f0125effc53dbe69f676bdff9d7f3f7a3d2e577eabbfb29da2a1e06"
+    },
+    {
+      "source": "tests/test_sstv.cpp",
+      "path": "tests/test_sstv.cpp",
+      "sha256": "6e090463c5af5f9056c313eb69aa20af3e884ac79daa642ae0ffd3deaf55e541"
+    }
+  ],
+  "local_changes": {
+    "sstv/sstv.hpp": "Optional encoder sample rate (default unchanged at 12000 Hz), plus phase accessor for a phase-continuous output fade. Martin M2 / Scottie S2 enum values.",
+    "sstv/encoder.cpp": "Generate native 48000-Hz PCM when requested; the original 12000-Hz path is unchanged.",
+    "sstv/timing.hpp": "Add Martin M2 (VIS40, 73.216-ms scans) and Scottie S2 (VIS56, 88.064-ms scans); existing mode timings remain unchanged.",
+    "sstv/decoder.cpp": "Extend VIS and late-entry acquisition to all four modes and apply the contiguous Martin VIS-stop sync rule to M2 as well. DSP filtering/tracking is unchanged."
+  },
+  "mode_parameter_references": [
+    "https://raw.githubusercontent.com/ON4QZ/QSSTV/master/src/sstv/sstvparam.cpp",
+    "https://raw.githubusercontent.com/dnet/pySSTV/master/pysstv/color.py"
+  ]
+}

@@ -15,9 +15,16 @@ int main(int argc, char** argv) {
             return 0;
         }
         QApplication app(argc, argv);
-        QCoreApplication::setOrganizationName("mm-sstv"); QCoreApplication::setApplicationName("mm-sstv");
+        QCoreApplication::setOrganizationName("HS-STV"); QCoreApplication::setApplicationName("HS-STV");
         QSettings settings;
+        // Preserve audio devices, levels and display preferences from the former name.
+        if (!settings.value("migration/mmSstv", false).toBool()) {
+            QSettings previous("mm-sstv", "mm-sstv");
+            for (const auto& key : previous.allKeys())
+                if (!settings.contains(key)) settings.setValue(key, previous.value(key));
+            settings.setValue("migration/mmSstv", true);
+        }
         mm_sstv::MainWindow window(mm_sstv::makeAudioOutput(), settings, mm_sstv::makeAudioInput()); window.show();
         return app.exec();
-    } catch (const std::exception& e) { std::cerr << "mm-sstv: " << e.what() << '\n'; return 1; }
+    } catch (const std::exception& e) { std::cerr << "HS-STV: " << e.what() << '\n'; return 1; }
 }

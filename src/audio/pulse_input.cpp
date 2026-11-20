@@ -20,7 +20,7 @@ public:
             bool found = false; for (const auto& d : devices) found |= d.id == device;
             if (!found) throw std::runtime_error("Audioeingang nicht verfügbar: " + device);
             const pa_sample_spec format{PA_SAMPLE_FLOAT32NE, sampleRate, 1};
-            stream_ = pa_stream_new(connection_->context, "mm-sstv Empfang", &format, nullptr);
+            stream_ = pa_stream_new(connection_->context, "hs-stv Empfang", &format, nullptr);
             if (!stream_) connection_->fail();
             pa_stream_set_read_callback(stream_, read, this);
             const pa_buffer_attr buffer{sampleRate * 4 / 5, UINT32_MAX, UINT32_MAX, UINT32_MAX, sampleRate * 4 / 100};

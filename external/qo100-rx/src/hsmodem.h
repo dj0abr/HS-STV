@@ -12,6 +12,8 @@
 #define CRC16RX 1
 extern int bitsPerSymbol, constellationSize, speed;
 extern uint64_t rx_header_candidates, rx_fec_failures, rx_crc_failures;
+extern uint64_t rx_fec_corrected_frames, rx_fec_corrected_bytes;
+extern unsigned rx_last_fec_corrected;
 void init_packer();
 uint8_t* unpack_data(uint8_t*, int);
 uint8_t* RX_Scramble(uint8_t*, int);

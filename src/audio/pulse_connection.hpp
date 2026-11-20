@@ -14,7 +14,7 @@ struct PulseConnection {
         try {
             loop = pa_mainloop_new();
             if (!loop) throw std::runtime_error("Audio: cannot allocate event loop");
-            context = pa_context_new(pa_mainloop_get_api(loop), "mm-sstv");
+            context = pa_context_new(pa_mainloop_get_api(loop), "hs-stv");
             if (!context) throw std::runtime_error("Audio: cannot allocate context");
             if (pa_context_connect(context, nullptr, PA_CONTEXT_NOAUTOSPAWN, nullptr) < 0) fail();
             wait([&] { return pa_context_get_state(context) == PA_CONTEXT_READY; });

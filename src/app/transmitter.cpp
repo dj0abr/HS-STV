@@ -30,9 +30,20 @@ void Transmitter::startImage(const std::string& device, ImageTransmission transm
         running_ = true;
     } catch (...) { stop(); throw; }
 }
+void Transmitter::startSstv(const std::string& device, Modulation mode, const SstvImage& image) {
+    if (running_) return;
+    if (device.empty()) throw std::invalid_argument("No output device selected");
+    sstv_ = std::make_unique<SstvAudio>(mode, image);
+    try {
+        audio_->start(device, [this](float* buffer, std::size_t frames) {
+            return sstv_->render(buffer, frames, level_.load(std::memory_order_relaxed));
+        }, modeSampleRate(mode));
+        running_ = true;
+    } catch (...) { stop(); throw; }
+}
 void Transmitter::stop() noexcept {
     audio_->stop(); // join callbacks before releasing DSP and image storage
-    modulator_.reset(); source_.reset(); image_.reset(); running_ = false;
+    modulator_.reset(); source_.reset(); image_.reset(); sstv_.reset(); running_ = false;
 }
 void Transmitter::setLevel(unsigned percent) {
     if (percent > 100) throw std::invalid_argument("Level outside 0..100 percent");

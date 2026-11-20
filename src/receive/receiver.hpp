@@ -18,10 +18,22 @@ struct ReceiveStatus {
     bool locked = false;
     double pilot = -1, offset = 0, level = -200;
     std::uint64_t frames = 0;
+    std::uint64_t headerCandidates = 0, crcFailures = 0, fecFailures = 0;
+    std::uint64_t fecCorrectedFrames = 0, fecCorrectedBytes = 0;
+    std::uint64_t syncDetected = 0, syncMissed = 0;
     QString state;
     double center = 1500, spectrumBinHz = 0;
     std::vector<float> spectrum;
+    double waterfallBinHz = 0;
+    std::vector<std::vector<float>> waterfall; // Consecutive 10-ms rows, oldest first.
     std::vector<std::array<float, 2>> points;
+};
+struct SstvUpdate {
+    enum class Kind { Begin, Line, End } kind = Kind::Begin;
+    Modulation modulation = Modulation::Martin1;
+    bool partial = false, complete = false, synchronized = false;
+    unsigned index = 0;
+    std::array<std::uint8_t, 960> rgb{};
 };
 class Receiver final : public QObject {
 public:
@@ -33,6 +45,7 @@ public:
     void start(const std::string& device, Modulation mode = Modulation::Apsk8);
     void stop();
     std::function<void(const ReceivedImage&)> imageReceived;
+    std::function<void(const SstvUpdate&)> sstvReceived;
     std::function<void(const ReceiveStatus&)> statusChanged;
     std::function<void(const QString&)> failed;
 private:

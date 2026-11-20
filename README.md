@@ -1,27 +1,34 @@
-# mm-sstv – digitale Bildübertragung mit HS-Modem
+# HS-STV – Bildübertragung mit HS-Modem und SSTV
 
 Bilder über auswählbare Soundkarten mit HS-Modem senden und empfangen.
 **8APSK · 6000 bit/s oder QPSK · 4410 bit/s.**
 Datenmitte 1500 Hz · Referenzträger 100 Hz · HS-Modem-kompatibel.
+Zusätzlich **SSTV Martin 1/2 und Scottie 1/2 · 320 × 256 Pixel** für Senden und Empfang.
 
 ## Start
 
 ```bash
-git clone https://github.com/dj0abr/mm-modem.git
-cd mm-modem
+git clone https://github.com/dj0abr/HS-STV.git
+cd HS-STV
 ./start.sh
 ```
 
 Das Programm beginnt ohne Aussendung. Der Audioausgang ist standardmäßig
 `toQO100`; eine gespeicherte Geräte- und Pegeleinstellung wird wiederverwendet.
-Unter **Setup → Audioausgang und Pegel…** sind beide einstellbar.
-**100 % entspricht weiterhin digitaler Vollaussteuerung.** Daten und Pilot werden
+Unter **Setup → Soundkarten…** werden Audioeingang und Audioausgang ausgewählt.
+Der **Pegelregler direkt neben dem TX-Bild** bleibt auch während einer Sendung bedienbar.
+**Bei 8APSK/QPSK entsprechen 100 % digitaler Vollaussteuerung.** Bei SSTV
+entsprechen **100 % dem angepassten Maximalpegel (−12,5 dBFS Spitze)**; der gesamte
+Reglerweg von 0 bis 100 % ist linear nutzbar. Daten und Pilot werden
 gemeinsam geregelt, ohne AGC oder Abschneiden von Spitzen.
 
 Das Fenster startet mit höchstens **900 × 560 Pixeln**, angepasst an den verfügbaren
 Bildschirm, und lässt sich bis **640 × 440 Pixel** verkleinern. Formatwahl und
 **Senden/STOP** liegen direkt über dem Sendebild; Die flachen Fortschrittsbalken stehen
 unter dem jeweiligen Bild: **TX rot**, **RX grün**. Die Signalanzeige ist kompakt darunter angeordnet.
+Links neben der kompakteren Signalanzeige regeln zwei senkrechte Schieber die
+Anzeigegrenzen für Spektrum und Wasserfall: **Min −100 bis −60 dBFS**,
+**Max −50 bis 0 dBFS**. Die Werte werden gespeichert; Standard ist **−90 / −20 dBFS**.
 Lange Dateinamen und Statusmeldungen werden abgekürzt und sind per Tooltip
 vollständig lesbar. Die Vorschauen passen sich dem Fenster an; die gewählte
 Größe des übertragenen Bildes bleibt davon unabhängig.
@@ -45,8 +52,18 @@ und die **Konstellation der gewählten Modulation**. Der Pilotsuchbereich ist sc
 Pilot grün markiert, die Grenzen des aktuellen Datenbands gelb gestrichelt.
 Die Konstellationspunkte erscheinen bei bestätigter Datensynchronisation grün.
 
-Ein vollständiges Bild lässt sich mit **Bild → Empfangsbild speichern…** als
-originales JPEG ablegen. Nicht vollständige Blöcke bleiben für Wiederholungen
+Nach vollständigem Bildempfang steht **Empfang abgeschlossen** unter dem Bild.
+Eine kompakte RX-Zeile zeigt AFC sowie bei digitalem Empfang gültige Frames,
+CRC-Fehler, FEC-korrigierte Frames und verworfene FEC-Kandidaten. Der Tooltip
+enthält zusätzlich die Zahl korrigierter RS-Bytes und erklärt die Zähler.
+Bei SSTV erscheinen erkannte und nicht erkannte Zeilensyncs des aktuellen bzw.
+letzten Bildes. Digitale Zähler laufen seit dem Start des Empfangs und werden
+beim Eingangs-/Moduswechsel zurückgesetzt.
+
+Empfangene Bilder werden automatisch im Unterordner **rxpic** des Arbeitsverzeichnisses
+abgelegt: vollständige digitale Bilder als originales JPEG, SSTV-Bilder als PNG.
+Mit **Bild → Empfangsordner öffnen** öffnet der Standard-Dateimanager diesen Ordner.
+Dateien werden atomar mit eindeutigen Namen geschrieben; vorhandene Bilder bleiben erhalten. Nicht vollständige Blöcke bleiben für Wiederholungen
 innerhalb der laufenden Sitzung im Speicher; sie werden nicht über einen
 Programmneustart hinweg gespeichert.
 
@@ -70,7 +87,21 @@ stellt die Audioadapter automatisch passend ein. Der 100-Hz-Referenzträger und
 100 % als digitale Vollaussteuerung bleiben erhalten.
 [Technik und Prüfungen von QPSK 4410](docs/QPSK4410.md).
 
-## Bild senden
+## SSTV Martin 1/2 und Scottie 1/2
+
+Alle vier SSTV-Modi sind im selben Modusfeld auswählbar und verwenden fest
+**320 × 256 Pixel**. Bilder werden proportional eingepasst. Der Empfang erscheint
+zeilenweise und lässt sich auch bei Teilempfang als PNG speichern.
+Die Sendedauer einschließlich VIS beträgt rund 115,2 s für Martin 1, 59,0 s für
+Martin 2, 110,5 s für Scottie 1 und 72,0 s für Scottie 2.
+
+Der SSTV-Monitor zeigt Spektrum und einen Wasserfall mit sechs Sekunden Verlauf
+(kurze Analysefenster machen die Sync-Impulse sichtbar), mit festen Hilfslinien für **Sync bei 1200 Hz**
+und **Bildsignal von 1500 bis 2300 Hz** zum Feinabstimmen der Empfangsfrequenz.
+Daneben steht der ermittelte AFC-Versatz. SSTV sendet keinen 100-Hz-Referenzträger.
+[Bedienung, Technik und Tests](docs/SSTV.md).
+
+## Bild senden (8APSK/QPSK)
 
 1. Ein Bild in die Vorschau ziehen, die Vorschau anklicken oder **Bild → Bild öffnen…** wählen.
 2. **Bildgröße** auswählen: 320×240, 640×480, 800×600 oder 1024×768.
@@ -90,23 +121,23 @@ Fensterschließen beendet ebenfalls die Ausgabe.
 
 „Sendung beendet“ bestätigt die lokale Audioausgabe, keine Empfangsbestätigung.
 Den korrekten Bildempfang bitte mit der vorhandenen HS-Modem-Installation prüfen.
-Der Bildempfang in mm-sstv läuft unabhängig davon weiter.
+Der Bildempfang in hs-stv läuft unabhängig davon weiter.
 
 Die Auswahl von Sendeausgang und Sende-Bildformat wird während einer laufenden Aussendung
-gesperrt; der Sendepegel kann im Setup weiterhin verändert werden. Bei fehlendem
+gesperrt; der Sendepegel kann direkt neben dem TX-Bild weiterhin verändert werden. Bei fehlendem
 gewähltem Gerät findet kein automatischer Wechsel auf eine andere Soundkarte statt.
 Nach erneutem Anschluss im Setup **Aktualisieren** drücken.
 
 ## Anschluss
 
 ```text
-mm-sstv → toQO100 → QO100_TRX2-Audioadapter → TX2 → Pluto
-mm-sstv ← fromQO100 ← QO100_TRX2-Audioadapter ← RX2 ← Pluto
+hs-stv → toQO100 → QO100_TRX2-Audioadapter → TX2 → Pluto
+hs-stv ← fromQO100 ← QO100_TRX2-Audioadapter ← RX2 ← Pluto
 ```
 
 Die virtuelle Soundkarte wird vom laufenden QO100_TRX2-Stack bereitgestellt,
-nicht von mm-sstv. Beide Programme im selben normalen Benutzerkonto starten.
-Frequenz und PTT-/Stationssteuerung werden außerhalb von mm-sstv eingestellt.
+nicht von hs-stv. Beide Programme im selben normalen Benutzerkonto starten.
+Frequenz und PTT-/Stationssteuerung werden außerhalb von hs-stv eingestellt.
 
 ```bash
 ./start.sh --list-audio
@@ -144,9 +175,9 @@ ctest --test-dir build --output-on-failure
 ```
 
 Ein Bild-Rundlauf einschließlich AFC bei +81 Hz wird bereits mit dem mitgebauten
-Empfangskern geprüft. Der optionale Eintrag ergänzt eine fünfzehnte Prüfgruppe zum
-Vergleich mit der bisherigen externen Installation. Ohne ihn stehen vierzehn
-eigenständige Prüfgruppen zur Verfügung, einschließlich 64 Original-Framevektoren.
+Empfangskern geprüft. Der optionale Eintrag ergänzt eine Prüfgruppe zum
+Vergleich mit der bisherigen externen Installation. Ohne ihn stehen achtzehn
+eigenständige Prüfgruppen zur Verfügung, einschließlich SSTV und 64 Original-Framevektoren.
 
 ## Offline-Audiodateien
 
@@ -154,10 +185,10 @@ Diese Werkzeuge öffnen keinen Audioausgang:
 
 ```bash
 # Zufallsdaten: Dauer, Pegel, Seed
-./build/bin/mm-sstv-signal /tmp/random.wav 10 100 1
+./build/bin/hs-stv-signal /tmp/random.wav 10 100 1
 
 # Bildsignal: Eingabe, Ausgabedatei, Breite, Höhe, Pegel
-./build/bin/mm-sstv-image-signal /pfad/bild.png /tmp/bild.wav 640 480 100
+./build/bin/hs-stv-image-signal /pfad/bild.png /tmp/bild.wav 640 480 100
 ```
 
 Der Bildexport erzeugt Mono-PCM16 mit 48 kHz sowie daneben `bild.wav.jpg` mit den
@@ -165,10 +196,11 @@ exakt übertragenen JPEG-Bytes zum Vergleichen.
 
 ## Struktur und Portierung
 
-- `include/mm_sstv/modem_mode.hpp`: native Parameter beider Modi für TX, RX, Audio und Anzeige.
+- `include/mm_sstv/modem_mode.hpp`: Parameter der digitalen und analogen Modi für TX, RX, Audio und Anzeige.
 - `src/core/`: Betriebssystem-unabhängige Modulation und endlicher Bild-Audiostrom.
 - `src/protocol/`: Serialisierung, CRC16, RS(255,223), Scrambler, Fragmentierung und Bildrekonstruktion.
 - `src/receive/`: Qt-Prozess-/Audioadapter für den Empfang.
+- `external/qo100-sstv/`: portabler Martin-1/2-/Scottie-1/2-Encoder und -Decoder aus QO100_TRX2.
 - `external/qo100-rx/`: übernommene Pilotsuche/AFC und RX-Dekodierung aus QO100_TRX2.
 - `src/app/`: Sendersteuerung und threadsichere Pegel-/Fortschrittsübergabe.
 - `src/audio/`: getrennte PulseAudio- und PortAudio-Adapter.

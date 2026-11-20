@@ -123,3 +123,30 @@ CLI-Rundlauf werden mit den originalen 4410-bit/s-Parametern geprüft.
 Die 8APSK-Wellenform bleibt im unabhängigen Vergleich unverändert.
 [QPSK4410.md](QPSK4410.md) beschreibt Details und Referenztests.
 Die benachbarten Originalprojekte wurden nur gelesen und nicht verändert.
+
+## SSTV Martin 1 und Scottie 1
+
+Auf ausdrücklichen Wunsch des Projektinhabers wurden Encoder, Decoder, Timing und
+Regressionstests aus seinem lokalen QO100_TRX2-Projekt übernommen:
+`decoder/sstv/{sstv.hpp,timing.hpp,encoder.cpp,decoder.cpp}` und
+`tests/test_sstv.cpp`. Der Quelltext wurde ohne Entfernen vorhandener Hinweise
+übernommen. `external/qo100-sstv/SOURCE.json` nennt Basisrevision, Originalpfade
+und Original-Prüfsummen. Die beiden Encoder-Dateien erhalten einen optionalen
+48-kHz-Ausgabepfad und Phasenzugriff; Decoder, Timing und Originaltests bleiben
+unverändert. Die neuen Audio-, Prozess- und GUI-Adapter stehen wie der übrige
+Anwendungscode unter GPL-3.0-or-later. Weitere Einzelheiten: `SSTV.md`.
+
+## Martin 2 und Scottie 2
+
+Die vorhandenen SSTV-Profile wurden um Martin 2 (VIS 40, Farbscan 73,216 ms) und
+Scottie 2 (VIS 56, Farbscan 88,064 ms) ergänzt. Zeitprofile und VIS-Werte wurden
+mit QSSTV (`src/sstv/sstvparam.cpp`) und PySSTV (`pysstv/color.py`) abgeglichen;
+die Quelllinks stehen in `SSTV.md` und im SSTV-Manifest. Daraus wurde kein weiterer
+Programmbaustein übernommen. Die Bilder werden wie bei QSSTV mit 320 × 256 Pixeln
+aufbereitet und dargestellt. Die verkürzten Scans begrenzen die horizontale
+Detailauflösung der analogen Übertragung.
+
+Im übernommenen Decoder wurden nur die Liste möglicher Modi, die Größe der
+Akquisitionszustände und die anfängliche Martin-Sync-Zuordnung erweitert. Die
+ursprünglichen 22 Prüfungen für M1/S1 bleiben unverändert enthalten; neue
+unabhängige Referenzsignale prüfen M2/S2 zusätzlich.
