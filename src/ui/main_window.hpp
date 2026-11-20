@@ -11,6 +11,7 @@
 class QLabel;
 class QPushButton;
 class QComboBox;
+class QCheckBox;
 class QAction;
 class QProgressBar;
 class QTimer;
@@ -31,6 +32,8 @@ private:
     void showReady();
     void prepare();
     void chooseImage();
+    void editTextOverlay();
+    void refreshOverlayChoice();
     void restartReceiver();
     void receivedImage(const ReceivedImage& image);
     void openReceiveFolder();
@@ -61,6 +64,10 @@ private:
     std::vector<AudioDevice> devices_;
     std::string device_;
     unsigned level_ = 35;
+    TextOverlay overlay_;
+    QComboBox* overlaySlots_ = nullptr;
+    QPushButton* overlayEdit_ = nullptr;
+    QAction* overlayAction_ = nullptr;
     QImage original_;
     QString filename_;
     std::optional<ImageTransmission> image_;
@@ -68,6 +75,7 @@ private:
     ImagePanel* preview_ = nullptr;
     Modulation mode_ = Modulation::Apsk8;
     QComboBox* modes_ = nullptr;
+    QCheckBox* waterfallId_ = nullptr;
     QComboBox* sizes_ = nullptr;
     QPushButton* start_ = nullptr;
     QLabel* status_ = nullptr;

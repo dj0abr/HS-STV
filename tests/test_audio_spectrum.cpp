@@ -38,7 +38,7 @@ int main() {
         // A Martin-1 sync lasts only 4.862 ms. Test all positions within a
         // 10-ms waterfall hop so a pulse cannot vanish between status updates.
         for (unsigned offset = 0; offset < 480; offset += 48) {
-            AudioSpectrum shortSpectrum(48000, 1024);
+            AudioSpectrum shortSpectrum(48000, 2048);
             std::vector<float> signal(4800);
             double phase = 0; float syncPeak = -160;
             for (unsigned i = 0; i < signal.size(); ++i) {
@@ -50,7 +50,8 @@ int main() {
                 shortSpectrum.push(signal.data() + i, 480);
                 const auto row = shortSpectrum.levels();
                 if (row.empty()) continue;
-                require(row.size() == 86, "Wrong waterfall frequency coverage");
+                require(std::abs(shortSpectrum.frequencyStep() - 23.4375) < 1e-9, "Wrong waterfall frequency resolution");
+                require(row.size() == 171, "Wrong waterfall frequency coverage");
                 syncPeak = std::max(syncPeak, row[std::size_t(std::lround(1200 / shortSpectrum.frequencyStep()))]);
             }
             require(syncPeak > -40, "Short SSTV sync disappeared between waterfall updates");

@@ -1,0 +1,9 @@
+{
+  "source_project": "QO100_TRX2",
+  "source_revision": "7af11b830ba83b7d497a89ca3f1492008b212cd9",
+  "files": {
+    "webbridge/waterfall_tx.cpp": "1af3d89087311436dd13a25013a2a53926e7a75e826d616c4e729b5fa0787fc9",
+    "web/waterfall-font.json": "caff4b69b21724087f1e3a04e2276ff39104ed0a9048d82b08110b7f62effe11",
+    "tests/test_waterfall_tx.py": "a1ded4d98acfeb0a1dcce70bf95e8ca371be08211ba6698a42911bac2c3327a3"
+  }
+}

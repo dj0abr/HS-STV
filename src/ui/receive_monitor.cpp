@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "receive_monitor.hpp"
 #include "mm_sstv/modem_mode.hpp"
+#include "mm_sstv/audio_spectrum.hpp"
 #include <QFontDatabase>
 #include <QPainter>
 #include <QImage>
@@ -21,7 +22,7 @@ ReceiveMonitor::ReceiveMonitor(QWidget* parent) : QWidget(parent) {
 }
 void ReceiveMonitor::clear(const QString& message, Modulation mode) {
     setMaximumHeight(isSstv(mode) ? 180 : 144); setMinimumHeight(isSstv(mode) ? 144 : 96);
-    setToolTip(isSstv(mode) ? "SSTV-Spektrum und Wasserfall · 0–4000 Hz\nWasserfall: neueste Werte oben · 6 Sekunden Verlauf · kurze 21-ms-Analysefenster\nSync: 1200 Hz · Bildsignal: 1500–2300 Hz (schattiert)\nHilfslinien zeigen die Sollfrequenzen vor AFC; Frequenz am Funkgerät fein abstimmen." :
+    setToolTip(isSstv(mode) ? "SSTV-Spektrum und Wasserfall · 0–4000 Hz\nWasserfall: neueste Werte oben · 6 Sekunden Verlauf · 23,4 Hz Frequenzauflösung · 43-ms-Analysefenster\nFarben: an und unter Min schwarz · an und über Max rot\nSync: 1200 Hz · Bildsignal: 1500–2300 Hz (schattiert)\nHilfslinien zeigen die Sollfrequenzen vor AFC; Frequenz am Funkgerät fein abstimmen." :
         "Empfangsaudio vor AFC und AGC · 0–4000 Hz\nGrün: erkannter Pilot · Fläche: Pilotsuche 20–900 Hz\nGelb: Datenband · Konstellation: empfangene I/Q-Symbole");
     status_ = {}; status_.modulation = mode; status_.state = message; points_.clear(); waterfall_.clear(); waterfallBinHz_ = 0; updateGeometry(); update();
 }
@@ -127,6 +128,11 @@ void ReceiveMonitor::paintEvent(QPaintEvent*) {
         if (!waterfall_.empty() && waterfallBinHz_ > 0) {
             const int bins = int(waterfall_.back().size()), rows = std::max(1, int(waterfall.height()));
             QImage image(bins, rows, QImage::Format_RGB32);
+            // Short FFT windows collect more broadband noise in each wider bin.
+            // Refer the colors to the spectrum's bin bandwidth so its noise floor
+            // and the waterfall respond consistently to the shared Min slider.
+            const double referenceBinHz = status_.spectrumBinHz > 0 ? status_.spectrumBinHz : AudioSpectrum::binHz;
+            const double bandwidthDb = 10 * std::log10(waterfallBinHz_ / referenceBinHz);
             for (int row = 0; row < rows; ++row) {
                 const std::size_t first = std::size_t(row) * 600 / rows;
                 const std::size_t last = std::min(waterfall_.size(), (std::size_t(row + 1) * 600 + rows - 1) / rows);
@@ -135,7 +141,7 @@ void ReceiveMonitor::paintEvent(QPaintEvent*) {
                     // Peak reduction keeps a 5-ms sync pulse visible when time rows share a pixel.
                     for (auto at = first; at < last; ++at) {
                         const auto& history = waterfall_[waterfall_.size() - 1 - at];
-                        if (std::size_t(bin) < history.size()) peak = std::max(peak, history[bin]);
+                        if (std::size_t(bin) < history.size()) peak = std::max(peak, float(history[bin] - bandwidthDb));
                     }
                     const double level = std::clamp((peak - minDb) / (maxDb - minDb), 0., 1.);
                     const auto color = QColor::fromHsvF((1 - level) * .67, 1., std::min(1., level * 2));

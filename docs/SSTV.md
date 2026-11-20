@@ -7,7 +7,8 @@ Die Bildgrößenauswahl zeigt dieses Format und ist gesperrt. Beim Wechsel zurü
 8APSK/QPSK wird die vorherige digitale Bildgröße wiederhergestellt.
 
 Geladene Bilder werden proportional eingepasst und mit weißen Rändern ergänzt.
-Für SSTV werden die RGB-Pixel direkt übertragen, ohne JPEG-Kompression.
+Für SSTV werden die RGB-Pixel direkt übertragen, ohne JPEG-Kompression. Rufzeichen
+und der ausgewählte Freitext aus **Text…** sind Bestandteil dieser Bildpixel.
 Die schnelleren Modi verwenden kürzere Farbscans; damit nimmt die horizontale
 Detailauflösung ab, auch wenn die Vorschau weiterhin 320 × 256 Pixel zeigt.
 
@@ -43,7 +44,9 @@ Bilddatei und keine Ergänzung fehlender Zeilen aus einer Wiederholung.
 
 Die Diagnoseanzeige nutzt für SSTV die ganze Breite als **Spektrum und Wasserfall
 von 0–4000 Hz**. Der Wasserfall zeigt sechs Sekunden Verlauf, die neuesten Werte
-oben. Er analysiert das unveränderte Audio in kurzen 21-ms-Fenstern alle 10 ms.
+oben. Er analysiert das unveränderte Audio in 43-ms-Fenstern (2048 Samples bei
+48 kHz) alle 10 ms. Die Frequenzauflösung beträgt **23,44 Hz** und ist damit
+doppelt so fein wie zuvor.
 Dadurch werden auch die kurzen Zeilensync-Impulse sichtbar. Beim Zusammenfassen
 mehrerer Zeitpunkte für eine Bildschirmzeile bleiben die stärksten Werte erhalten.
 Zwei senkrechte Regler links neben der Anzeige bestimmen die gemeinsame
@@ -56,6 +59,12 @@ schattierte **Bildsignal 1500–2300 Hz**. Die Hilfslinien in Spektrum und Wasse
 im unveränderten Empfangsaudio vor der AFC. So kann der Operator am Funkgerät
 fein abstimmen. Der angezeigte AFC-Wert entspricht dem geschätzten Frequenzversatz.
 Ein Konstellationsdiagramm wird bei SSTV nicht benötigt.
+
+Die Wasserfallfarben sind auf die FFT-Binbreite des Spektrums bezogen: Die
+breiteren Bins der kurzen Analysefenster lassen den Rauschboden dadurch nicht
+künstlich heller erscheinen. Werte an oder unter **Min** werden schwarz.
+Schmale Träger und kurze Impulse können wegen der unterschiedlichen Zeit- und
+Frequenzauflösung weiterhin andere Spitzenwerte als im Spektrum zeigen.
 
 ## Übernommener Kern und Portierung
 

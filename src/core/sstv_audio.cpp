@@ -9,8 +9,6 @@ namespace mm_sstv {
 namespace {
 constexpr unsigned rate = 48000, fade = rate/200, silence = rate*3/10;
 constexpr double scale = (32767.0/32768)/24576;
-// Calibrated station level, with additional amplitude reserve at the slider endpoint.
-constexpr float maxGain = (.06f / .35f) * 1.15f * 1.20f;
 }
 qo100::sstv::Mode sstvMode(Modulation mode) {
     if (!isSstv(mode)) throw std::invalid_argument("Expected an SSTV mode");
@@ -32,7 +30,7 @@ SstvAudio::SstvAudio(Modulation mode, const SstvImage& image)
 std::size_t SstvAudio::render(float* output, std::size_t capacity, float gain) {
     if ((!output && capacity) || !std::isfinite(gain) || gain < 0 || gain > 1) throw std::invalid_argument("Invalid SSTV audio buffer or gain");
     // Use the entire slider range linearly, with the calibrated SSTV maximum.
-    gain *= maxGain;
+    gain *= sstvMaximumGain;
     const auto at = rendered_.load(std::memory_order_relaxed), count = std::min(capacity, total_-at);
     std::array<std::int16_t, 480> pcm{};
     for (std::size_t done = 0; done < count;) {

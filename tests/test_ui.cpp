@@ -2,6 +2,7 @@
 #include "main_window.hpp"
 #include "image_panel.hpp"
 #include "receive_monitor.hpp"
+#include "overlay_editor.hpp"
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
@@ -13,6 +14,10 @@
 #include <QDir>
 #include <QDesktopServices>
 #include <QLabel>
+#include <QLineEdit>
+#include <QSpinBox>
+#include <QCheckBox>
+#include <QBuffer>
 #include <QMimeData>
 #include <QProgressBar>
 #include <QPushButton>
@@ -132,6 +137,95 @@ private slots:
         QCOMPARE(saved.size(), QSize(320, 256)); QVERIFY(saved.pixelColor(160, 0).blue() > 210);
         QCOMPARE(saved.pixelColor(160, 255), QColor(Qt::black));
     }
+    void overlayModelRenderingAndStorage() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat);
+        QImage base(320, 256, QImage::Format_RGB32); base.fill(QColor(80, 90, 100));
+        TextOverlay overlay;
+        QCOMPARE(drawTextOverlay(base, overlay), base);
+        const auto plain = preparePicture(base, base.size());
+        QByteArray previous; QBuffer buffer(&previous); QVERIFY(buffer.open(QIODevice::WriteOnly));
+        QVERIFY(fitPicture(base, base.size()).save(&buffer, "JPEG", 90));
+        QCOMPARE(QByteArray(reinterpret_cast<const char*>(plain.jpeg.data()), int(plain.jpeg.size())), previous);
+        overlay.texts = {{"DJ0ABR", "DL1TEST", "CQ QO100", "73 AND THANKS", "TEST 3", "TEST 4", "TEST 5"}};
+        overlay.selected = 1; const auto original = base.copy(); const auto rendered = drawTextOverlay(base, overlay);
+        QVERIFY(rendered != base); QCOMPARE(base, original);
+        auto alternate = overlay; alternate.texts[2] = "INACTIVE"; QCOMPARE(drawTextOverlay(base, alternate), rendered);
+        alternate.texts[3] = "ACTIVE CHANGED"; QVERIFY(drawTextOverlay(base, alternate) != rendered);
+        unsigned white = 0, black = 0;
+        for (int y=0;y<rendered.height();++y) for (int x=0;x<rendered.width();++x) {
+            white += rendered.pixelColor(x,y) == QColor(Qt::white); black += rendered.pixelColor(x,y) == QColor(Qt::black);
+        }
+        QVERIFY(white > 20); QVERIFY(black > 20);
+        const auto small = overlayGeometry(overlay, QSize(320, 256)); const auto large = overlayGeometry(overlay, QSize(640, 512));
+        QCOMPARE(large[0].bounds.x(), small[0].bounds.x()*2); QCOMPARE(large[0].bounds.y(), small[0].bounds.y()*2);
+        overlay.texts[3] = QString(100, 'W'); overlay.layers[2].x = 1; overlay.layers[2].y = 1;
+        for (const auto size : {QSize(320,256), QSize(640,480), QSize(1024,768)})
+            for (const auto& item : overlayGeometry(overlay, size)) QVERIFY(QRectF(QPointF(0,0), QSizeF(size)).contains(item.bounds));
+        overlay.layers[1].font = 2; overlay.layers[1].size = 32; overlay.layers[1].bold = false;
+        saveTextOverlay(settings, overlay); const auto restored = loadTextOverlay(settings);
+        QCOMPARE(restored.texts, overlay.texts); QCOMPARE(restored.selected, 1);
+        QCOMPARE(restored.layers[1].font, 2); QCOMPARE(restored.layers[1].size, 32); QVERIFY(!restored.layers[1].bold);
+        QCOMPARE(restored.layers[2].x, 1.); QCOMPARE(restored.layers[2].y, 1.);
+        settings.setValue("overlay/selected", 99); settings.setValue("overlay/layer0/size", 500);
+        QCOMPARE(loadTextOverlay(settings).selected, 4); QCOMPARE(loadTextOverlay(settings).layers[0].size, 48);
+    }
+    void overlayEditorKeyboardMouseAndFormatting() {
+        TextOverlay original; original.texts[0] = "DJ0ABR";
+        QImage base(320,256,QImage::Format_RGB32); base.fill(Qt::darkGray);
+        OverlayEditor editor(base, original); editor.resize(600,380); editor.show(); QTest::qWait(30);
+        editor.findChild<QLineEdit*>("overlayOtherCall")->setText("DL1TEST");
+        editor.findChild<QLineEdit*>("overlayFreeText4")->setText("CQ QO100");
+        QCOMPARE(editor.overlay().selected, 3);
+        editor.findChild<QComboBox*>("overlayFont")->setCurrentIndex(2);
+        editor.findChild<QSpinBox*>("overlaySize")->setValue(30);
+        editor.findChild<QCheckBox*>("overlayBold")->setChecked(false);
+        QCOMPARE(editor.overlay().layers[2].font, 2); QCOMPARE(editor.overlay().layers[2].size, 30); QVERIFY(!editor.overlay().layers[2].bold);
+        editor.findChild<QComboBox*>("overlayLayer")->setCurrentIndex(0);
+        auto* canvas = editor.findChild<OverlayPreview*>("overlayPreview"); QVERIFY(canvas);
+        const double before = editor.overlay().layers[0].x;
+        QTest::keyClick(canvas, Qt::Key_Right, Qt::ShiftModifier);
+        QVERIFY(std::abs(editor.overlay().layers[0].x - before - 5./320) < 1e-6);
+        const auto box = overlayGeometry(editor.overlay(), base.size())[0].bounds; const auto area = canvas->imageRect();
+        const QPoint point = (area.topLeft() + QPointF(box.center().x()*area.width()/320, box.center().y()*area.height()/256)).toPoint();
+        const auto old = editor.overlay().layers[0];
+        QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, point);
+        QTest::mouseMove(canvas, point+QPoint(20,10));
+        QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, point+QPoint(20,10));
+        QVERIFY(editor.overlay().layers[0].x > old.x); QVERIFY(editor.overlay().layers[0].y > old.y);
+        editor.reject(); QCOMPARE(original.texts[1], QString()); QCOMPARE(original.layers[0].x, 12./320);
+    }
+    void overlayMainWindowSelectionCancelAndTxLock() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
+        settings.setValue("overlay/text0", "DJ0ABR");
+        MainWindow window(std::make_unique<FakeOutput>(state), settings); window.resize(640,440); window.show();
+        QVERIFY(window.loadImage(picture(dir))); auto* choices = window.findChild<QComboBox*>("overlayTextSlot"); QVERIFY(choices); QCOMPARE(choices->count(),5);
+        auto* edit = window.findChild<QPushButton*>("overlayEditButton"); auto* action = window.findChild<QAction*>("editTextOverlay"); QVERIFY(edit); QVERIFY(action);
+        QTimer::singleShot(30, &window, [&] {
+            auto* dialog = window.findChild<QDialog*>("textOverlayEditor"); QVERIFY(dialog);
+            dialog->findChild<QLineEdit*>("overlayOwnCall")->setText("CANCELLED"); dialog->reject();
+        });
+        action->trigger(); QCOMPARE(settings.value("overlay/text0").toString(), QString("DJ0ABR"));
+        QTimer::singleShot(30, &window, [&] {
+            auto* dialog = window.findChild<QDialog*>("textOverlayEditor"); QVERIFY(dialog);
+            dialog->resize(600,380);
+            dialog->findChild<QLineEdit*>("overlayOtherCall")->setText("DL1TEST");
+            dialog->findChild<QLineEdit*>("overlayFreeText1")->setText("CQ QO100");
+            dialog->findChild<QLineEdit*>("overlayFreeText5")->setText("73 AND THANKS");
+            QTest::qWait(20);
+            if(qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT")) QVERIFY(dialog->grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT")+".editor.png"));
+            dialog->accept();
+        });
+        edit->click(); QCOMPARE(choices->currentIndex(),4); QCOMPARE(settings.value("overlay/selected").toInt(),4);
+        QCOMPARE(settings.value("overlay/text1").toString(),QString("DL1TEST"));
+        const auto previous = window.findChild<QWidget*>("imagePreview")->grab().toImage(); choices->setCurrentIndex(0);
+        QVERIFY(window.findChild<QWidget*>("imagePreview")->grab().toImage() != previous);
+        auto* send = window.findChild<QPushButton*>("transmitButton"); send->click(); QVERIFY(state.open);
+        QVERIFY(!edit->isEnabled()); QVERIFY(!action->isEnabled()); QVERIFY(!choices->isEnabled()); QVERIFY(window.findChild<QSlider*>("outputLevel")->isEnabled());
+        choices->setCurrentIndex(4); QCOMPARE(choices->currentIndex(),0);
+        send->click(); QVERIFY(edit->isEnabled()); QVERIFY(choices->isEnabled());
+        QTest::qWait(20); QCOMPARE(window.size(),QSize(640,440));
+        if(qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT")) QVERIFY(window.grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT")+".overlay.png"));
+    }
     void defaultImageStartStopAndClose() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
         {
@@ -193,6 +287,52 @@ private slots:
         QCOMPARE(restored.findChild<QSlider*>("spectrumMax")->value(), 0);
         auto* monitor = restored.findChild<ReceiveMonitor*>("receiveMonitor");
         QCOMPARE(monitor->minimumDb(), -100); QCOMPARE(monitor->maximumDb(), 0);
+    }
+    void waterfallNoiseFloorMatchesSpectrum() {
+        ReceiveMonitor monitor; monitor.resize(800, 164);
+        monitor.clear(QString(), Modulation::Martin1);
+        monitor.setDbRange(-68, -35);
+        ReceiveStatus status; status.modulation = Modulation::Martin1;
+        status.spectrumBinHz = 48000. / 32768;
+        status.waterfallBinHz = 48000. / 2048;
+        status.spectrum.assign(2731, -76.f);
+        // The same broadband noise reads 12.04 dB higher in a 2048-point FFT
+        // than in a 32768-point FFT. Both plots must share the selected floor.
+        std::vector<float> row(171, -63.9588f);
+        for (int bin = 80; bin < 100; ++bin) row[bin] = -10.f;
+        status.waterfall.assign(600, row); monitor.setStatus(status);
+        auto frame = monitor.grab().toImage();
+        QCOMPARE(frame.pixelColor(220, 120), QColor(Qt::black));
+        QCOMPARE(frame.pixelColor(430, 120), QColor(Qt::red));
+        // Moving Min below the noise must reveal it; changing Max must not
+        // change the cutoff. Existing history is recolored immediately.
+        monitor.setDbRange(-90, -35); frame = monitor.grab().toImage();
+        QVERIFY(frame.pixelColor(220, 120) != QColor(Qt::black));
+        monitor.setDbRange(-68, 0); frame = monitor.grab().toImage();
+        QCOMPARE(frame.pixelColor(220, 120), QColor(Qt::black));
+    }
+    void optionalWaterfallId() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
+        {
+            MainWindow window(std::make_unique<FakeOutput>(state), settings); window.resize(640, 440); window.show();
+            auto* enabled = window.findChild<QCheckBox*>("waterfallId"); QVERIFY(enabled); QVERIFY(!enabled->isChecked());
+            QVERIFY(window.loadImage(picture(dir))); auto* modes = window.findChild<QComboBox*>("modulation");
+            auto* button = window.findChild<QPushButton*>("transmitButton");
+            enabled->setChecked(true); QVERIFY(settings.value("transmit/waterfallId").toBool());
+            for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410, Modulation::Martin1, Modulation::Martin2, Modulation::Scottie1, Modulation::Scottie2}) {
+                modes->setCurrentIndex(modes->findData(int(mode))); button->click();
+                QVERIFY(!enabled->isEnabled()); QCOMPARE(state.sampleRate, modeSampleRate(mode));
+                QVERIFY(window.findChild<QLabel*>("statusText")->text().contains(QString::fromStdString(waterfallIdText(mode))));
+                QVERIFY(window.findChild<QSlider*>("outputLevel")->isEnabled());
+                // Cancel while the ID is still playing; no image is sent afterwards.
+                button->click(); QVERIFY(!state.open); QVERIFY(enabled->isEnabled());
+            }
+            QTest::qWait(20); QCOMPARE(window.size(), QSize(640,440));
+            if (qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT"))
+                QVERIFY(window.grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + ".waterfall-id.png"));
+        }
+        MainWindow restored(std::make_unique<FakeOutput>(state), settings);
+        QVERIFY(restored.findChild<QCheckBox*>("waterfallId")->isChecked());
     }
     void noImplicitFallback() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
@@ -307,6 +447,7 @@ private slots:
     }
     void qpskSelectionAndNativeRateRoundTrip() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state; CaptureState capture;
+        settings.setValue("overlay/text0", "DJ0ABR"); settings.setValue("overlay/text2", "CQ QO100");
         MainWindow window(std::make_unique<FakeOutput>(state), settings, std::make_unique<FakeCapture>(capture)); window.show();
         QTRY_VERIFY(capture.open); QVERIFY(window.loadImage(picture(dir)));
         auto* modes = window.findChild<QComboBox*>("modulation"); QVERIFY(modes); QCOMPARE(modes->currentIndex(), 0);
@@ -326,6 +467,10 @@ private slots:
         }
         modes->setCurrentIndex(0); QCOMPARE(capture.sampleRate, 48000u); QVERIFY(capture.open);
         QCOMPARE(settings.value("modem/modulation").toString(), QString("8apsk"));
+        QTRY_COMPARE(QDir("rxpic").entryList({"*.jpg"}, QDir::Files).size(), 1);
+        const auto expected = preparePicture(QImage(picture(dir)), QSize(640,480), loadTextOverlay(settings));
+        QFile received(QDir("rxpic").absoluteFilePath(QDir("rxpic").entryList({"*.jpg"}, QDir::Files).first())); QVERIFY(received.open(QIODevice::ReadOnly));
+        QCOMPARE(received.readAll(), QByteArray(reinterpret_cast<const char*>(expected.jpeg.data()), int(expected.jpeg.size())));
     }
     void sstvModesAndProgressiveReceive_data() {
         QTest::addColumn<int>("selectedMode");
@@ -339,6 +484,7 @@ private slots:
         const auto mode = Modulation(selectedMode);
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state; CaptureState capture;
         settings.setValue("image/sizeIndex", 2);
+        settings.setValue("overlay/text0", "DJ0ABR"); settings.setValue("overlay/text2", "CQ QO100");
         MainWindow window(std::make_unique<FakeOutput>(state), settings, std::make_unique<FakeCapture>(capture));
         window.resize(640, 440); window.show(); QTRY_VERIFY(capture.open); QVERIFY(window.loadImage(picture(dir)));
         auto* modes = window.findChild<QComboBox*>("modulation");
@@ -374,6 +520,9 @@ private slots:
         const auto saved = QDir("rxpic").absoluteFilePath(QDir("rxpic").entryList({"*.png"}, QDir::Files).first());
         QImage received(saved); QCOMPARE(received.size(), QSize(320, 256));
         QVERIFY(received.pixelColor(160, 5).red() > 240); QVERIFY(received.pixelColor(160, 128).blue() > 210);
+        unsigned textPixels = 0;
+        for(int y=10;y<44;++y) for(int x=10;x<155;++x) textPixels += received.pixelColor(x,y).green() < 220;
+        QVERIFY(textPixels > 15); // The white letterbox now contains the received callsign outline.
         if (qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT")) {
             QVERIFY(window.grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + "." + modeKey(mode) + ".png"));
         }

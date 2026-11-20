@@ -150,3 +150,49 @@ Im übernommenen Decoder wurden nur die Liste möglicher Modi, die Größe der
 Akquisitionszustände und die anfängliche Martin-Sync-Zuordnung erweitert. Die
 ursprünglichen 22 Prüfungen für M1/S1 bleiben unverändert enthalten; neue
 unabhängige Referenzsignale prüfen M2/S2 zusätzlich.
+
+## Bildtexte
+
+Bedienung, Ebenenmodell und Voreinstellungen wurden mit
+`QO100_TRX2/web/sstv-tx.js` und dem Editor in `web/index.html` abgeglichen.
+HS-STV verwendet drei Ebenen: eigenes Rufzeichen, Gegenstation und einen von fünf
+Freitexten. `text_overlay.*` und `overlay_editor.*` sind native Qt-Neuimplementierungen
+unter GPL-3.0-or-later. Die Qt-Version verwendet QPainterPath für weiße Schrift mit
+schwarzer Kontur, QSettings für die dauerhafte Ablage sowie Qt-Maus-/Tastaturereignisse.
+
+Bildaufbereitung und Modulationskern bleiben getrennt. Die Texte werden nach dem
+Skalieren und vor JPEG-Kodierung bzw. SSTV-Rasterbildung eingezeichnet. Der Editor
+arbeitet auf einer Kopie; Abbrechen und Bild-/Formatwechsel verändern das Original
+nicht. Ohne ausgefüllte Texte bleibt die bisherige Bildkodierung erhalten.
+
+Die Erweiterung bindet keine Browser-Laufzeit, Linux-Schriften oder nativen
+Betriebssystem-APIs ein. Font-Familien werden über Qt-Style-Hints bzw. die
+System-Monospace-Schrift gewählt; Unterschiede der installierten Schriftarten sind
+möglich. Mauskoordinaten verwenden den jeweiligen Qt-5-/Qt-6-Zugriff. Die Anwendung
+wurde auch mit dem PortAudio-Adapter unter Linux gebaut; ein nativer Windows-Build
+ist damit nicht ersetzt.
+
+## Waterfall-ID
+
+Auf ausdrücklichen Benutzerwunsch wurden das Rasterverfahren, die Tonkämme mit
+Phasenverteilung und die 7×9-Zeichen aus dem lokalen QO100_TRX2 übernommen:
+`webbridge/waterfall_tx.cpp` und `web/waterfall-font.json`, Revision
+`7af11b830ba83b7d497a89ca3f1492008b212cd9`. Prüfsummen stehen in
+`WATERFALL-REFERENCE.json`. `tests/test_waterfall_tx.py` dient als unabhängige
+Referenz für Schriftorientierung und Frequenzbänder. Das Original bleibt unverändert.
+
+`waterfall_text.cpp` und `waterfall_font.inc` bilden die portable C++17-Anpassung
+unter GPL-3.0-or-later. Anstelle der Bridge-/JSON-Anbindung und des 12-kHz-TX2-
+Transportes werden die Zeichen als feste Tabelle eingebunden und Mono-Float-PCM
+mit 44,1 oder 48 kHz erzeugt. Das Tonraster und die Schriftorientierung bleiben
+erhalten. Für kurze Kennungen werden 100 ms pro Rasterzeile verwendet. Die
+Normierung wird an die vorhandene digitale Vollaussteuerung beziehungsweise den
+kalibrierten SSTV-Maximalpegel angepasst. Ein gemeinsamer Audio-Stream sendet
+Kennung, 300 ms Pause und das unveränderte Bildsignal. Neue Betriebssystem-
+Abhängigkeiten entstehen nicht. Bedienung und Prüfungen: `WATERFALL-ID.md`.
+
+Vor der Waterfall-Kennung ergänzt HS-STV einen gehaltenen Punktmarker aus den
+beiden oberen Frequenzbändern: fünf aktive Rasterzeilen und eine Leerzeile
+(500 ms + 100 ms bei der Standard-Rasterdauer). Anders als ein normales Punkt-
+Glyph beginnt dieser Vorlauf sofort mit Audio, damit eine audiogesteuerte PTT
+vor dem ersten Buchstaben anziehen kann. Die Samplezählung umfasst den Vorlauf.

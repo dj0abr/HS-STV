@@ -96,10 +96,43 @@ Die Sendedauer einschließlich VIS beträgt rund 115,2 s für Martin 1, 59,0 s f
 Martin 2, 110,5 s für Scottie 1 und 72,0 s für Scottie 2.
 
 Der SSTV-Monitor zeigt Spektrum und einen Wasserfall mit sechs Sekunden Verlauf
-(kurze Analysefenster machen die Sync-Impulse sichtbar), mit festen Hilfslinien für **Sync bei 1200 Hz**
-und **Bildsignal von 1500 bis 2300 Hz** zum Feinabstimmen der Empfangsfrequenz.
+mit **23,44 Hz Frequenzauflösung** und kurzen, überlappenden Analysefenstern für
+die Sync-Impulse. Feste Hilfslinien für **Sync bei 1200 Hz**
+und **Bildsignal von 1500 bis 2300 Hz** helfen beim Feinabstimmen der Empfangsfrequenz.
 Daneben steht der ermittelte AFC-Versatz. SSTV sendet keinen 100-Hz-Referenzträger.
 [Bedienung, Technik und Tests](docs/SSTV.md).
+
+## Optionale Waterfall-ID
+
+**Waterfall-ID** neben der Betriebsart sendet vor jedem Bild eine im Wasserfall
+lesbare Kennung, z. B. **HS-STV 8APSK**, **HS-STV QPSK** oder **HS-STV MARTIN1**.
+Der Text folgt automatisch der Betriebsart. Die Auswahl wird gespeichert;
+standardmäßig ist sie aus. Ein 500-ms-Punkt mit 100 ms Abstand gibt einer audiogesteuerten PTT Zeit zum
+Anziehen, bevor der erste Buchstabe beginnt. Der Vorspann dauert einschließlich
+Pausen rund 10–13 s.
+Pegel und STOP gelten für Kennung und Bild. [Details](docs/WATERFALL-ID.md).
+
+## Rufzeichen und Textüberlagerung
+
+**Text…** über dem TX-Bild oder **Bild → Textüberlagerung…** öffnet den Editor.
+Dort lassen sich eigenes Rufzeichen, Gegenstation und fünf Freitexte eingeben.
+Die Auswahl **1–5** neben **Text…** bestimmt den eingeblendeten Freitext; beide
+Rufzeichen werden unabhängig davon angezeigt. Leere Felder erscheinen nicht.
+
+Texte im Editor mit der Maus verschieben oder nach Anklicken mit den Pfeiltasten
+um einen Bildpixel bewegen; **Umschalt** bewegt um fünf Pixel. Pro Textebene sind
+serifenlose Schrift, Serifenschrift oder Monospace, Größe und Fettdruck einstellbar.
+Die fünf Freitexte teilen sich eine Position und Formatierung. Weiße Schrift mit
+schwarzer Kontur bleibt auf hellen und dunklen Bildern sichtbar. Lange Texte
+werden auf die Bildbreite eingepasst; die Vorschau zeigt das Ergebnis.
+
+**Übernehmen** speichert Texte, Formatierung, Positionen und Auswahl für den
+nächsten Start. **Abbrechen** verwirft die Bearbeitung. Die Überlagerung wird bei
+jeder Bildaufbereitung neu auf eine Kopie des skalierten Bildes gezeichnet;
+Positionen und Schriftgröße skalieren mit dem gewählten Bildformat. Das geladene
+Original bleibt erhalten. Die Funktion gilt für 8APSK, QPSK und alle SSTV-Modi.
+Während einer Sendung sind Texteditor und Vorlagenwahl gesperrt; der Pegelregler
+bleibt bedienbar.
 
 ## Bild senden (8APSK/QPSK)
 
@@ -108,8 +141,8 @@ Daneben steht der ermittelte AFC-Versatz. SSTV sendet keinen 100-Hz-Referenzträ
 3. Vorschau, JPEG-Dateigröße und ungefähre Sendedauer prüfen, dann **Senden** drücken.
 
 Das Bild wird proportional in das gewählte Format eingepasst; freie Ränder werden
-weiß aufgefüllt. Die Vorschau zeigt das tatsächlich kodierte JPEG. Es werden keine
-Rufzeichen oder sonstigen Texte in das Bild eingefügt. Die JPEG-Qualität wird
+weiß aufgefüllt. Die Vorschau zeigt das tatsächlich kodierte JPEG einschließlich
+gewählter Textüberlagerungen. Die JPEG-Qualität wird
 bei Bedarf automatisch reduziert, damit die Datei höchstens 200000 Byte groß ist.
 
 Während des Sendens zeigt der Button **STOP** und der Fortschrittsbalken läuft.
@@ -204,7 +237,7 @@ exakt übertragenen JPEG-Bytes zum Vergleichen.
 - `external/qo100-rx/`: übernommene Pilotsuche/AFC und RX-Dekodierung aus QO100_TRX2.
 - `src/app/`: Sendersteuerung und threadsichere Pegel-/Fortschrittsübergabe.
 - `src/audio/`: getrennte PulseAudio- und PortAudio-Adapter.
-- `src/ui/`: Qt-Widgets-Oberfläche und Qt-Bildadapter für JPEG/Skalierung.
+- `src/ui/`: Qt-Widgets-Oberfläche, portabler Texteditor/Renderer und Qt-Bildadapter für JPEG/Skalierung.
 
 Der Protokollkern braucht weder Qt noch Betriebssystem-APIs. Er enthält einen
 kleinen eigenständigen Reed-Solomon-Encoder mit den exakten HS-Modem-Parametern.

@@ -59,7 +59,7 @@ int main(int argc, char** argv) {
     qo100::sstv::Decoder decoder(callbacks,sstvMode(mode));
     auto decim=firdecim_rrrf_create_kaiser(4,8,60);firdecim_rrrf_set_scale(decim,.25f);
     AudioSpectrum spectrum;
-    AudioSpectrum waterfall(48000, 1024); // 21-ms windows, sampled every 10 ms.
+    AudioSpectrum waterfall(48000, 2048); // 43-ms windows, 23.44-Hz bins, sampled every 10 ms.
     std::array<float,4800> buffer{};std::array<float,4> group{};unsigned pending=0;
     while(true) {
         const auto bytes=std::fread(buffer.data(),1,buffer.size()*sizeof(float),stdin);

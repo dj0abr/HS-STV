@@ -64,10 +64,10 @@ with tempfile.TemporaryDirectory() as directory:
         assert status[-1]['sync_detected'] == sum(line['synchronized'] for line in lines)
         assert status[-1]['sync_detected'] + status[-1]['sync_missed'] == 256
         waterfall_rows = [row for event in status for row in event['waterfall_dbfs']]
-        assert len(waterfall_rows) == len(samples) // 480 - 2, 'Waterfall skipped 10-ms audio intervals'
-        assert all(len(row) == 86 for row in waterfall_rows)
-        assert all(event['waterfall_bin_hz'] == 46.875 for event in status)
-        assert max(row[26] for row in waterfall_rows[100:600]) > -40, 'Sync missing from short-window waterfall'
+        assert len(waterfall_rows) == len(samples) // 480 - 4, 'Waterfall skipped 10-ms audio intervals'
+        assert all(len(row) == 171 for row in waterfall_rows)
+        assert all(event['waterfall_bin_hz'] == 23.4375 for event in status)
+        assert max(row[51] for row in waterfall_rows[100:600]) > -40, 'Sync missing from short-window waterfall'
         assert any(e['received_lines'] > 10 and e['received_lines'] < 50 for e in status), 'No progressive rows'
         print(f'{mode}: full VIS, 256 ordered RGB rows, mean color error {error:.2f}, live spectrum, calibrated TX level, no 100-Hz pilot')
         # Late entry must remain a partial image even when the decoder reaches its predicted end.

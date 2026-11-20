@@ -2,6 +2,7 @@
 #include "main_window.hpp"
 #include "image_panel.hpp"
 #include "receive_monitor.hpp"
+#include "overlay_editor.hpp"
 #include <QFileDialog>
 #include <QDateTime>
 #include <QFileInfo>
@@ -11,6 +12,7 @@
 #include <QProgressBar>
 #include <QAction>
 #include <QComboBox>
+#include <QCheckBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -30,6 +32,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <cmath>
 
 namespace mm_sstv {
 namespace {
@@ -66,6 +69,7 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     const auto savedMode = settings_.value("modem/modulation", "8apsk").toString();
     for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410, Modulation::Martin1, Modulation::Martin2, Modulation::Scottie1, Modulation::Scottie2})
         if (savedMode == modeKey(mode)) mode_ = mode;
+    overlay_ = loadTextOverlay(settings_);
     inputDevice_ = settings_.value("audio/input", "fromQO100").toString().toStdString();
     device_ = settings_.value("audio/output", "toQO100").toString().toStdString();
     level_ = std::clamp(settings_.value("audio/level", 35).toInt(), 0, 100);
@@ -73,6 +77,8 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     auto* file = menuBar()->addMenu("Bild");
     open_ = file->addAction("Bild öffnen…"); open_->setObjectName("openImage");
     connect(open_, &QAction::triggered, this, [this] { chooseImage(); });
+    overlayAction_ = file->addAction("Textüberlagerung…"); overlayAction_->setObjectName("editTextOverlay");
+    connect(overlayAction_, &QAction::triggered, this, [this] { editTextOverlay(); });
     auto* folder = file->addAction("Empfangsordner öffnen"); folder->setObjectName("openReceiveFolder");
     connect(folder, &QAction::triggered, this, [this] { openReceiveFolder(); });
     auto* menu = menuBar()->addMenu("Setup");
@@ -83,8 +89,18 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     auto* panes = new QGridLayout; panes->setHorizontalSpacing(6); panes->setVerticalSpacing(4);
     panes->setColumnStretch(0, 1); panes->setColumnStretch(1, 1); panes->setRowStretch(1, 1);
     auto* sendHeader = new QHBoxLayout; sendHeader->setSpacing(4);
-    auto* title = new QLabel("Sendebild", central); auto titleFont = title->font(); titleFont.setBold(true); title->setFont(titleFont);
-    sendHeader->addWidget(title);
+    overlayEdit_ = new QPushButton("Text…", central); overlayEdit_->setObjectName("overlayEditButton");
+    overlayEdit_->setFixedWidth(overlayEdit_->fontMetrics().horizontalAdvance("Text…") + 18);
+    overlayEdit_->setToolTip("Sendebild: Rufzeichen und Freitexte bearbeiten");
+    connect(overlayEdit_, &QPushButton::clicked, this, [this] { editTextOverlay(); });
+    auto titleFont = overlayEdit_->font(); titleFont.setBold(true); sendHeader->addWidget(overlayEdit_);
+    overlaySlots_ = new QComboBox(central); overlaySlots_->setObjectName("overlayTextSlot"); overlaySlots_->setAccessibleName("Freitext auswählen");
+    overlaySlots_->addItems({"1", "2", "3", "4", "5"}); overlaySlots_->setFixedWidth(42); sendHeader->addWidget(overlaySlots_);
+    refreshOverlayChoice();
+    connect(overlaySlots_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        if (transmitter_.running()) { refreshOverlayChoice(); return; }
+        overlay_.selected = std::clamp(index, 0, 4); saveTextOverlay(settings_, overlay_); refreshOverlayChoice(); prepare();
+    });
     sizes_ = new QComboBox(central); sizes_->setObjectName("imageSize"); sizes_->setToolTip("Bildgröße der übertragenen JPEG-Datei; die Vorschau passt sich dem Fenster an.");
     sendHeader->addWidget(sizes_);
     connect(sizes_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
@@ -169,8 +185,14 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
             QString("%1 · %2 bit/s").arg(modulationName(mode)).arg(parameters(mode).bitRate()), int(mode));
     modes_->setCurrentIndex(modes_->findData(int(mode_)));
     modes_->setToolTip("Modus für Senden und Empfang; beide Stationen gleich einstellen.\n8APSK/QPSK: HS-Modem-kompatibel mit 100-Hz-Referenzträger.\nSSTV Martin 1/2 und Scottie 1/2: 320 × 256 Pixel, Sync 1200 Hz, Bildsignal 1500–2300 Hz.");
+    waterfallId_ = new QCheckBox("Waterfall-ID", central); waterfallId_->setObjectName("waterfallId");
+    waterfallId_->setChecked(settings_.value("transmit/waterfallId", false).toBool());
+    waterfallId_->setToolTip("Vor jeder Bildsendung HS-STV und die gewählte Betriebsart als Wasserfalltext senden.\nDer Sendepegel gilt auch für die Kennung; STOP bricht die gesamte Sendung ab.");
+    connect(waterfallId_, &QCheckBox::toggled, this, [this](bool enabled) {
+        settings_.setValue("transmit/waterfallId", enabled); prepare();
+    });
+    footer->addWidget(waterfallId_); footer->addWidget(modes_); layout->addLayout(footer);
     updateFormats();
-    footer->addWidget(modes_); layout->addLayout(footer);
     connect(modes_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
         mode_ = static_cast<Modulation>(modes_->currentData().toInt());
         settings_.setValue("modem/modulation", modeKey(mode_));
@@ -214,7 +236,8 @@ void MainWindow::updateButton() {
     const bool running = transmitter_.running();
     start_->setText(running ? "STOP" : "Senden");
     start_->setEnabled(running || (deviceAvailable() && (image_.has_value() || bool(sstvImage_))));
-    modes_->setEnabled(!running); sizes_->setEnabled(!running && !isSstv(mode_)); preview_->setEditable(!running); open_->setEnabled(!running);
+    overlayEdit_->setEnabled(!running); overlayAction_->setEnabled(!running); overlaySlots_->setEnabled(!running);
+    waterfallId_->setEnabled(!running); modes_->setEnabled(!running); sizes_->setEnabled(!running && !isSstv(mode_)); preview_->setEditable(!running); open_->setEnabled(!running);
 }
 void MainWindow::showReady() {
     if (deviceAvailable()) status_->setText("Bereit · " + QString::fromStdString(device_) + " · " + QString::number(level_) + " %");
@@ -230,13 +253,13 @@ void MainWindow::toggle() {
     try {
         if (isSstv(mode_)) {
             if (!sstvImage_) return;
-            transmitter_.startSstv(device_, mode_, *sstvImage_);
+            transmitter_.startSstv(device_, mode_, *sstvImage_, waterfallId_->isChecked());
         } else {
             if (!image_) return;
-            transmitter_.startImage(device_, *image_);
+            transmitter_.startImage(device_, *image_, waterfallId_->isChecked());
         }
         progress_->setValue(0); updateButton();
-        status_->setText("Sendet Bild · " + QString::fromStdString(device_));
+        status_->setText(transmitter_.sendingWaterfallId() ? "Sendet Waterfall-ID · " + QString::fromStdString(waterfallIdText(mode_)) : "Sendet Bild · " + QString::fromStdString(device_));
     } catch (const std::exception& e) {
         updateButton(); status_->setText("Start fehlgeschlagen: " + QString::fromUtf8(e.what()));
     }
@@ -250,6 +273,8 @@ void MainWindow::poll() {
         transmitter_.stop(); updateButton(); progress_->setValue(100); status_->setText("Sendung beendet.");
     } else if (const auto underruns = transmitter_.audio().underruns()) {
         status_->setText("Sendet · Audioaussetzer: " + QString::number(underruns) + " · Audioverbindung prüfen");
+    } else {
+        status_->setText(transmitter_.sendingWaterfallId() ? "Sendet Waterfall-ID · " + QString::fromStdString(waterfallIdText(mode_)) : "Sendet Bild · " + QString::fromStdString(device_));
     }
     if (transmitter_.running()) progress_->setValue(transmitter_.progress());
 }
@@ -273,21 +298,37 @@ bool MainWindow::loadImage(const QString& filename) {
 void MainWindow::prepare() {
     image_.reset(); sstvImage_.reset(); progress_->setValue(0);
     if (original_.isNull()) { updateButton(); return; }
+    const double idSeconds = waterfallId_->isChecked() ? double(waterfallIdSamples(mode_)) / modeSampleRate(mode_) : 0;
     try {
         if (isSstv(mode_)) {
-            const auto picture = fitPicture(original_, QSize(320, 256));
+            const auto picture = drawTextOverlay(fitPicture(original_, QSize(320, 256)), overlay_);
             sstvImage_ = std::make_unique<SstvImage>(sstvRaster(picture)); preview_->setImage(picture);
-            imageInfo_->setText(QString("%1 · 320 × 256 · %2 s").arg(filename_).arg(sstvImageSamples(mode_) / 48000., 0, 'f', 1));
+            imageInfo_->setText(QString("%1 · 320 × 256 · %2 s").arg(filename_).arg(sstvImageSamples(mode_) / 48000. + idSeconds, 0, 'f', 1));
             showReady(); return;
         }
-        const auto picture = preparePicture(original_, sizes_->currentData().toSize());
+        const auto picture = preparePicture(original_, sizes_->currentData().toSize(), overlay_);
         image_ = prepareImage(picture.jpeg, filename_.toUtf8().toStdString(), mode_); preview_->setImage(picture.preview);
-        const auto seconds = (image_->audioFrames() + parameters(mode_).sampleRate - 1) / parameters(mode_).sampleRate;
+        const auto seconds = std::size_t(std::ceil(double(image_->audioFrames()) / parameters(mode_).sampleRate + idSeconds));
         imageInfo_->setText(QString("%1 · %2 × %3 · %4 kB · %5 s")
             .arg(QString::fromStdString(image_->filename)).arg(picture.preview.width()).arg(picture.preview.height())
             .arg(image_->jpegBytes / 1000., 0, 'f', 1).arg(seconds));
         showReady();
     } catch (const std::exception& e) { imageInfo_->clear(); status_->setText(QString::fromUtf8(e.what())); updateButton(); }
+}
+void MainWindow::refreshOverlayChoice() {
+    const QSignalBlocker block(overlaySlots_); overlaySlots_->setCurrentIndex(overlay_.selected);
+    const auto text = overlay_.texts[2 + overlay_.selected];
+    overlaySlots_->setToolTip(QString("Freitext %1: %2").arg(overlay_.selected + 1).arg(text.isEmpty() ? "(leer)" : text));
+}
+void MainWindow::editTextOverlay() {
+    if (transmitter_.running()) return;
+    const auto target = isSstv(mode_) ? QSize(320, 256) : sizes_->currentData().toSize();
+    QImage base;
+    if (original_.isNull()) { base = QImage(target, QImage::Format_RGB32); base.fill(QColor("#404950")); }
+    else base = fitPicture(original_, target);
+    OverlayEditor editor(std::move(base), overlay_, this);
+    if (editor.exec() != QDialog::Accepted) return;
+    overlay_ = editor.overlay(); saveTextOverlay(settings_, overlay_); refreshOverlayChoice(); prepare();
 }
 void MainWindow::restartReceiver() {
     archiveSstv();

@@ -19,31 +19,50 @@ void Transmitter::startTest(const std::string& device, bool validFrames, Modulat
         running_ = true;
     } catch (...) { stop(); throw; }
 }
-void Transmitter::startImage(const std::string& device, ImageTransmission transmission) {
+void Transmitter::startImage(const std::string& device, ImageTransmission transmission, bool waterfallId) {
     if (running_) return;
     if (device.empty()) throw std::invalid_argument("No output device selected");
-    image_ = std::make_unique<ImageAudio>(std::move(transmission));
     try {
+        const auto mode = transmission.modulation;
+        image_ = std::make_unique<ImageAudio>(std::move(transmission));
+        if (waterfallId) waterfall_ = std::make_unique<WaterfallTextAudio>(waterfallIdText(mode), modeSampleRate(mode));
+        renderedFrames_.store(0, std::memory_order_relaxed);
+        totalFrames_ = image_->frames() + (waterfall_ ? waterfall_->frames() : 0);
         audio_->start(device, [this](float* buffer, std::size_t frames) {
-            return image_->render(buffer, frames, level_.load(std::memory_order_relaxed));
+            return renderImageAudio(buffer, frames);
         }, image_->sampleRateHz());
         running_ = true;
     } catch (...) { stop(); throw; }
 }
-void Transmitter::startSstv(const std::string& device, Modulation mode, const SstvImage& image) {
+void Transmitter::startSstv(const std::string& device, Modulation mode, const SstvImage& image, bool waterfallId) {
     if (running_) return;
     if (device.empty()) throw std::invalid_argument("No output device selected");
-    sstv_ = std::make_unique<SstvAudio>(mode, image);
     try {
+        sstv_ = std::make_unique<SstvAudio>(mode, image);
+        if (waterfallId) waterfall_ = std::make_unique<WaterfallTextAudio>(waterfallIdText(mode), modeSampleRate(mode));
+        renderedFrames_.store(0, std::memory_order_relaxed);
+        totalFrames_ = sstv_->frames() + (waterfall_ ? waterfall_->frames() : 0);
         audio_->start(device, [this](float* buffer, std::size_t frames) {
-            return sstv_->render(buffer, frames, level_.load(std::memory_order_relaxed));
+            return renderImageAudio(buffer, frames);
         }, modeSampleRate(mode));
         running_ = true;
     } catch (...) { stop(); throw; }
 }
+std::size_t Transmitter::renderImageAudio(float* output, std::size_t frames) {
+    const float gain = level_.load(std::memory_order_relaxed);
+    const auto prefix = waterfall_ ? waterfall_->render(output, frames, sstv_ ? gain * sstvMaximumGain : gain) : 0;
+    std::size_t count = prefix;
+    if (prefix < frames) {
+        if (sstv_) count += sstv_->render(output + prefix, frames - prefix, gain);
+        else count += image_->render(output + prefix, frames - prefix, gain);
+    }
+    renderedFrames_.fetch_add(count, std::memory_order_relaxed);
+    return count;
+}
 void Transmitter::stop() noexcept {
     audio_->stop(); // join callbacks before releasing DSP and image storage
-    modulator_.reset(); source_.reset(); image_.reset(); sstv_.reset(); running_ = false;
+    modulator_.reset(); source_.reset(); image_.reset(); sstv_.reset(); waterfall_.reset();
+    renderedFrames_.store(0, std::memory_order_relaxed); totalFrames_ = 0; running_ = false;
 }
 void Transmitter::setLevel(unsigned percent) {
     if (percent > 100) throw std::invalid_argument("Level outside 0..100 percent");

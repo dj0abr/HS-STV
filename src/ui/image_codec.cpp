@@ -71,8 +71,8 @@ SstvImage sstvRaster(const QImage& picture) {
     for (unsigned y = 0; y < 256; ++y) std::copy_n(rgb.constScanLine(y), 960, result[y].begin());
     return result;
 }
-PreparedPicture preparePicture(const QImage& original, QSize target) {
-    const auto canvas = fitPicture(original, target);
+PreparedPicture preparePicture(const QImage& original, QSize target, const TextOverlay& overlay) {
+    const auto canvas = drawTextOverlay(fitPicture(original, target), overlay);
     for (int quality = 90; quality >= 20; quality -= 5) {
         QByteArray encoded; QBuffer buffer(&encoded); buffer.open(QIODevice::WriteOnly);
         if (!canvas.save(&buffer, "JPEG", quality)) throw std::runtime_error("JPEG-Kodierung nicht verfügbar");
