@@ -32,6 +32,7 @@
 #include <QScopedValueRollback>
 #include <QTimer>
 #include <QStackedWidget>
+#include "beacon_view.hpp"
 #include <QVBoxLayout>
 #include <algorithm>
 #include <cmath>
@@ -151,12 +152,8 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     styleProgress(progress_, "#e76969"); styleProgress(receiveProgress_, "#5ab875");
     panes->addWidget(progress_, 3, 0); panes->addWidget(receiveProgress_, 3, 1);
     contentPages_->addWidget(imagePage);
-    auto* beaconPage = new QLabel("QO100 MM-Bake · Empfangstest\n\n8APSK · 7200 bit/s · 48 kHz\n\n"
-        "Pilot, AFC und Konstellation unten prüfen.\n"
-        "Grüne Punkte und „Sync“ bestätigen FEC-/CRC-gültige Frames.\n\n"
-        "CW-Skimmer, DX-Cluster und Bulletins folgen in den nächsten Teststufen.", contentPages_);
-    beaconPage->setObjectName("beaconPhysicalPage"); beaconPage->setAlignment(Qt::AlignCenter); beaconPage->setWordWrap(true);
-    contentPages_->addWidget(beaconPage); layout->addWidget(contentPages_, 1);
+    beaconView_ = new BeaconView(contentPages_);
+    contentPages_->addWidget(beaconView_); layout->addWidget(contentPages_, 1);
     receiveStatistics_ = new CompactLabel(central, Qt::ElideRight); receiveStatistics_->setObjectName("receiveStatistics");
     auto statisticsFont = receiveStatistics_->font(); statisticsFont.setPointSizeF(9); receiveStatistics_->setFont(statisticsFont);
     receiveStatistics_->setText("RX · Warte auf Audiodaten"); layout->addWidget(receiveStatistics_);
@@ -224,6 +221,7 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     settings_.remove("receive/enabled"); // Migrate the obsolete manual-pause preference.
     receiver_.sstvReceived = [this](const SstvUpdate& update) { receivedSstv(update); };
     receiver_.imageReceived = [this](const ReceivedImage& image) { receivedImage(image); };
+    receiver_.beaconMessageReceived = [this](const BeaconMessage& message) { beaconView_->appendMessage(message); };
     receiver_.statusChanged = [this](const ReceiveStatus& status) {
         monitor_->setStatus(status); syncDisplayRange(); showReceiveStatistics(status);
         QString details = status.state;

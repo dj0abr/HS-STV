@@ -64,9 +64,10 @@ int main(int argc, char** argv) {
         checkPreviewWarnings(picture);
         ImageAudio audio(prepareImage(picture.jpeg, "receive-test.jpg", mode));
         auto input = std::make_unique<FakeInput>(); auto* source = input.get(); Receiver rx(std::move(input));
-        unsigned previews = 0; bool locked = false, complete = false, spectrumSeen = false, pointsSeen = false, silenceSeen = false; QString failure;
+        unsigned previews = 0, audioUpdates = 0; bool locked = false, complete = false, spectrumSeen = false, pointsSeen = false, silenceSeen = false; QString failure;
         rx.failed = [&](const auto& text) { failure = text; };
         rx.statusChanged = [&](const ReceiveStatus& status) {
+            if (status.spectrumBinHz > 0) ++audioUpdates;
             if (status.modulation != mode) throw std::runtime_error("Wrong RX mode");
             locked |= status.locked;
             if (status.fecCorrectedFrames > status.frames || status.fecCorrectedBytes < status.fecCorrectedFrames || status.headerCandidates < status.frames)
@@ -86,10 +87,23 @@ int main(int argc, char** argv) {
         };
         rx.start("fromQO100", mode);
         if (source->sampleRate != parameters(mode).sampleRate) throw std::runtime_error("Wrong capture rate");
+        const auto feed = [&](const float* samples, std::size_t count) {
+            // The offline producer can run >50x faster than real capture. Wait
+            // for a decoded audio status instead of overrunning the bounded RX
+            // queue when other tests compete for CPU time. Keep production
+            // buffering unchanged and still fail on a stalled decoder.
+            const auto before = audioUpdates;
+            source->receive(samples, count); QElapsedTimer handoff; handoff.start();
+            do { QCoreApplication::processEvents(); QThread::msleep(1); }
+            while (count >= parameters(mode).sampleRate / 10 && audioUpdates == before &&
+                   failure.isEmpty() && handoff.elapsed() < 1000);
+            if (!failure.isEmpty()) throw std::runtime_error(failure.toStdString());
+            if (count >= parameters(mode).sampleRate / 10 && audioUpdates == before)
+                throw std::runtime_error("RX did not acknowledge the synthetic audio block");
+        };
         std::array<float, 4800> block{};
         while (const auto count = audio.render(block.data(), block.size(), .6f)) {
-            source->receive(block.data(), count); QCoreApplication::processEvents(); QThread::msleep(2);
-            if (!failure.isEmpty()) throw std::runtime_error(failure.toStdString());
+            feed(block.data(), count);
         }
         QElapsedTimer timer; timer.start();
         while (!complete && failure.isEmpty() && timer.elapsed() < 5000) { QCoreApplication::processEvents(); QThread::msleep(2); }
@@ -97,7 +111,7 @@ int main(int argc, char** argv) {
         // Flush the display history with digital silence; no frozen constellation/spectrum.
         block.fill(0);
         for (unsigned i = 0; i < 15; ++i) {
-            source->receive(block.data(), block.size()); QCoreApplication::processEvents(); QThread::msleep(2);
+            feed(block.data(), block.size());
         }
         timer.restart();
         while (!silenceSeen && failure.isEmpty() && timer.elapsed() < 3000) { QCoreApplication::processEvents(); QThread::msleep(2); }

@@ -4,12 +4,12 @@ Die Erweiterung entsteht vollständig in C++/Qt. Es wird kein Python-Decoder und
 kein Python-Hilfsprozess eingebunden. Der Bakenmodus ist ausschließlich Empfang.
 Die bisherigen 8APSK-/QPSK-Bildmodi und SSTV bleiben eigenständige Betriebsarten.
 
-## Stufe 1: physikalischer Empfang (bereit zum Stationstest)
+## Stufe 1: physikalischer Empfang (Stationstest erfolgreich)
 
-Rechts unten **QO100 MM-Bake** auswählen. Der obere Bereich zeigt vorerst eine
-Empfangstest-Seite. Die drei Textfenster folgen nach dem erfolgreichen Empfangstest.
-Unterhalb bleiben die Digitalanzeige mit Spektrum und Konstellation sowie die
-RX-Statistik sichtbar. Senden und Waterfall-ID sind in diesem Modus deaktiviert.
+Der Stationstest der ersten Stufe wurde am 21.11.2026 erfolgreich bestätigt:
+Synchronisation, Konstellation und gültige Frames wurden an der echten Bake
+empfangen. Unterhalb der Textbereiche bleiben Spektrum, Konstellation und
+RX-Statistik sichtbar. Senden und Waterfall-ID sind im Bakenmodus deaktiviert.
 
 Das Profil verwendet 48-kHz-Mono-Audio, 8APSK, 2400 Symbole/s und 7200 bit/s.
 Die Vor-Dezimation ist 5, der Symboltracker arbeitet mit 4 Samples/Symbol und
@@ -42,7 +42,7 @@ weiterhin keinen automatischen Wechsel auf ein anderes Gerät.
 6. Zurück zu 8APSK/QPSK oder SSTV wechseln; Bildbedienung und Sendemöglichkeit
    müssen wieder vorhanden sein.
 
-Erst nach diesem Stationstest wird Stufe 2 eingebaut.
+Stufe 1 ist abgenommen; die folgende Stufe 2 ist jetzt zum Stationstest bereit.
 
 ### Automatische Prüfungen
 
@@ -61,16 +61,54 @@ ctest --test-dir build -R 'mm_beacon_phy|audio_system_defaults|gui_controls' --o
 Der PortAudio-Adapter unterstützt dieselbe Auswahl des Systemstandards und wird
 zusätzlich unter Linux kompiliert. Das ersetzt keine spätere Windows-Prüfung.
 
-## Stufe 2: CW-Skimmer und DX-Cluster
+## Stufe 2: CW-Skimmer und DX-Cluster (bereit zum Stationstest)
 
-Die bereits CRC-geprüften Modemframes an einen C++-Nachrichtensammler anbinden.
-Frame-Typ 8, Untertyp 0 enthält DX-Cluster-Meldungen mit Längenbyte; Untertyp 2
-enthält CW-Skimmer-Text direkt nach dem Typbyte. Zeichensätze, Feldformatierung
-und Duplikaterkennung aus QO100_TRX2 übernehmen. Drei Textbereiche werden
-angelegt, der Bulletinbereich bleibt zunächst leer. Beide Meldungslisten müssen
-laufend wachsen, begrenzt bleiben und manuelles Lesen ohne Scrollsprünge erlauben.
-Abnahme: korrekte Rufzeichen, Frequenzen, Zeitangaben und Sonderzeichen aus
-Testframes und echtem Empfang. Noch kein neuer Bulletin-Inhalt.
+Die CRC-geprüften Modemframes werden im Bakenmodus an den C++-Nachrichtensammler
+`BeaconMessages` übergeben. Frame-Typ 8, Untertyp 0 enthält DX-Cluster-Meldungen
+mit Längenbyte; Untertyp 2 enthält CW-Skimmer-Text direkt nach dem Typbyte. Die
+Portierung folgt `QO100_TRX2/external/mmdecoder/data_collector.py`: UTF-8 mit
+Windows-1252-Fallback, Feldformatierung und kanalbezogene Duplikaterkennung.
+Für den Fallback ist unter Qt 6 keine zusätzliche Codec-Bibliothek nötig.
+
+Der obere Bereich enthält links CW-Skimmer und DX-Cluster übereinander, rechts
+Bulletins. Die Trennlinien lassen sich verschieben. Beide Meldungslisten zeigen
+höchstens die jüngsten 1000 Einträge. Jede Zeile beginnt mit der lokalen
+Empfangszeit in UTC; die übertragene UTC-Zeit bleibt ebenfalls lesbar. Gleiche
+Meldungen innerhalb von 120 Sekunden werden unterdrückt. Unbekannte Textformate
+bleiben als Klartext sichtbar. Beim Lesen älterer Zeilen oder Markieren von Text
+springt die Ansicht nicht bei jeder neuen Meldung nach unten. Die Texte bleiben
+beim Wechsel der Betriebsart im Fenster erhalten; sie werden noch nicht auf
+Datenträger archiviert. Der Bulletinbereich bleibt bis Stufe 3 leer.
+
+### Stationstest und Abnahmekriterien
+
+1. HS-STV neu starten und **QO100 MM-Bake** wählen; Audioeingang und Abstimmung
+   wie beim erfolgreichen Test von Stufe 1 einstellen.
+2. Auf **RX · Sync**, grüne Konstellation und steigenden OK-Zähler achten.
+3. Neue Meldungen müssen im richtigen Fenster erscheinen: CW-Skimmer mit
+   Rufzeichen, Frequenz, dB und WPM; DX-Cluster mit Rufzeichen, Frequenz in kHz,
+   Kommentar, UTC und gegebenenfalls Locator.
+4. Wiederholte gleiche Meldungen sollen innerhalb von zwei Minuten nicht erneut
+   angehängt werden; Meldungen mit geänderten Inhalten bleiben sichtbar.
+5. Rufzeichen, Frequenzen, Umlaute und Sonderzeichen prüfen. Einzelne noch nicht
+   erkannte Formatvarianten erscheinen unverändert als Klartext und können so
+   für die Anpassung gemeldet werden.
+6. In einer längeren Liste zurückscrollen und Text markieren: Neu empfangene
+   Meldungen dürfen die Leseposition nicht zum Listenende versetzen.
+7. Zwischen Bildmodus und Bake wechseln. Die empfangenen Texte bleiben erhalten.
+   Bulletins werden in dieser Stufe noch nicht dekodiert.
+
+`mm_beacon_messages` prüft die Parser, Zeichensätze, Duplikate und ungültige
+Frames. `mm_beacon_text_views` prüft Kanaltrennung, Klartextdarstellung,
+Speicherbegrenzung und stabiles Scrollen/Markieren. `gui_controls` speist
+synthetisches 7200-bit/s-Audio durch den echten Empfangskern bis in die beiden
+Textfenster ein. Alle neuen Prüfungen sind C++ und benötigen kein echtes Audio.
+
+```sh
+ctest --test-dir build -R 'mm_beacon_|gui_controls' --output-on-failure
+```
+
+Nach erfolgreichem Stationstest dieser Stufe folgt die Bulletin-Dekodierung.
 
 ## Stufe 3: Bulletins
 

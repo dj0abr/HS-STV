@@ -3,6 +3,7 @@
 #include "mm_sstv/audio_input.hpp"
 #include "mm_sstv/modem_mode.hpp"
 #include "mm_sstv/image_assembler.hpp"
+#include "beacon_messages.hpp"
 #include <QByteArray>
 #include <QElapsedTimer>
 #include <QObject>
@@ -46,6 +47,7 @@ public:
     void stop();
     std::function<void(const ReceivedImage&)> imageReceived;
     std::function<void(const SstvUpdate&)> sstvReceived;
+    std::function<void(const BeaconMessage&)> beaconMessageReceived;
     std::function<void(const ReceiveStatus&)> statusChanged;
     std::function<void(const QString&)> failed;
 private:
@@ -58,6 +60,7 @@ private:
     QElapsedTimer statusAge_;
     QByteArray lines_;
     ImageAssembler assembler_;
+    BeaconMessages beaconMessages_;
     Modulation mode_ = Modulation::Apsk8;
     std::mutex mutex_;
     std::deque<std::vector<float>> queued_;

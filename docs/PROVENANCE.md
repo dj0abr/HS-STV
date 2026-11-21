@@ -209,3 +209,13 @@ beiden oberen Frequenzbändern: fünf aktive Rasterzeilen und eine Leerzeile
 (500 ms + 100 ms bei der Standard-Rasterdauer). Anders als ein normales Punkt-
 Glyph beginnt dieser Vorlauf sofort mit Audio, damit eine audiogesteuerte PTT
 vor dem ersten Buchstaben anziehen kann. Die Samplezählung umfasst den Vorlauf.
+
+## MM-Bake: C++-Textsammler
+
+`src/receive/beacon_messages.cpp` überträgt die CW-/DX-Auswertung aus
+`QO100_TRX2/external/mmdecoder/data_collector.py` nach C++/Qt: Typ 8, Untertyp 0
+mit Längenbyte für DX-Cluster, Untertyp 2 ohne Längenbyte für CW-Skimmer,
+UTF-8/Windows-1252 und Duplikatfenster von 120 Sekunden. Keine Python-Laufzeit,
+Tkinter-, HTTP- oder SQLite-Schicht wird übernommen. Die Oberfläche verwendet
+Qt-Klartextfenster; Bulletin-Dateidekodierung ist noch nicht enthalten. Native
+Testframes prüfen den Signalweg vom 7200-bit/s-Empfang bis zur Textausgabe.

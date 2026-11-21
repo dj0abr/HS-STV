@@ -99,11 +99,15 @@ stellt die Audioadapter automatisch passend ein. Der 100-Hz-Referenzträger und
 100 % als digitale Vollaussteuerung bleiben erhalten.
 [Technik und Prüfungen von QPSK 4410](docs/QPSK4410.md).
 
-## QO100 MM-Bake – erste Teststufe
+## QO100 MM-Bake – CW-Skimmer und DX-Cluster
 
-Die neue Auswahl **QO100 MM-Bake** ist ein reiner Empfangsmodus mit **8APSK ·
-7200 bit/s**. Die erste Stufe zeigt Pilot/AFC, Spektrum, Konstellation und gültige
-Frames; die Textdekodierung folgt nach dem Stationstest.
+Die Auswahl **QO100 MM-Bake** ist ein reiner Empfangsmodus mit **8APSK ·
+7200 bit/s**. Links erscheinen **CW-Skimmer** und **DX-Cluster** in getrennten
+Textfenstern. Rechts ist der Bulletinbereich für die nächste Teststufe vorbereitet.
+Die Digitalanzeige zeigt weiterhin Pilot/AFC, Spektrum, Konstellation und gültige
+Frames. Gleiche Meldungen werden innerhalb von zwei Minuten unterdrückt; die
+Listen enthalten jeweils höchstens 1000 Einträge. Beim Zurückscrollen bleibt die
+Leseposition auch bei neuen Meldungen erhalten.
 [Testanleitung und weitere Stufen](docs/MM-BAKE.md).
 
 ## SSTV Martin 1/2 und Scottie 1/2

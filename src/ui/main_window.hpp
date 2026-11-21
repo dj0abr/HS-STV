@@ -22,6 +22,7 @@ class QStackedWidget;
 namespace mm_sstv {
 class ImagePanel;
 class ReceiveMonitor;
+class BeaconView;
 class MainWindow final : public QMainWindow {
 public:
     MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings, std::unique_ptr<AudioInput> input = nullptr);
@@ -108,6 +109,7 @@ private:
     QLabel* imageInfo_ = nullptr;
     QProgressBar* progress_ = nullptr;
     QStackedWidget* contentPages_ = nullptr;
+    BeaconView* beaconView_ = nullptr;
     QAction* open_ = nullptr;
 };
 }

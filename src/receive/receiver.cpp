@@ -138,12 +138,14 @@ void Receiver::readOutput() {
                 std::copy(rgb.begin(), rgb.end(), update.rgb.begin());
             } else continue;
             if (sstvReceived) sstvReceived(update);
-        } else if (event == "frame" && !isBeacon(mode_)) {
+        } else if (event == "frame") {
             const auto hex = json.value("payload_hex").toString().toLatin1(); if (hex.size() != 438) continue;
             const auto payload = QByteArray::fromHex(hex); if (payload.size() != 219) continue;
             ReceivedFrame frame; frame.type = json.value("frame_type").toInt(-1); frame.counter = json.value("frame_number").toInt(-1); frame.status = json.value("frame_info").toInt(-1);
             std::copy(payload.begin(), payload.end(), frame.payload.begin());
-            if (const auto image = assembler_.accept(frame); image && imageReceived) imageReceived(*image);
+            if (isBeacon(mode_)) {
+                if (const auto message = beaconMessages_.accept(frame); message && beaconMessageReceived) beaconMessageReceived(*message);
+            } else if (const auto image = assembler_.accept(frame); image && imageReceived) imageReceived(*image);
         }
     }
     if (lines_.size() > 65536) fail("Ungültige Ausgabe des Empfangskerns");

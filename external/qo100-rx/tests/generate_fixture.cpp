@@ -6,6 +6,7 @@
 #include "hsmodem.h"
 #include <iostream>
 #include <string>
+#include <algorithm>
 #include "fec/schifra_galois_field.hpp"
 #include "fec/schifra_galois_field_polynomial.hpp"
 #include "fec/schifra_sequential_root_generator_polynomial_creator.hpp"
@@ -39,6 +40,19 @@ int main(int argc, char** argv) {
         raw[2]=2;
         const char* msg="TEST CW-SKIMMER RX VALIDATION";
         memcpy(raw+3,msg,strlen(msg));
+        if (mode == "spots") {
+            std::fill(raw + 2, raw + 221, 0);
+            if (frame % 2 == 0) {
+                raw[2] = 2;
+                const char* text = "DL0ABC:~10489750~DL1TEST~18~23~CQ~1301Z";
+                memcpy(raw + 3, text, strlen(text));
+            } else {
+                raw[2] = 0;
+                const char* text = "DL1AAA~14025.0~VK9TEST~CQ DX~1300Z~JO40";
+                raw[3] = static_cast<uint8_t>(strlen(text));
+                memcpy(raw + 4, text, strlen(text));
+            }
+        }
         uint16_t crc=Crc16_messagecalc(0,raw,221);
         raw[221]=crc>>8; raw[222]=crc;
         if(corrupt) raw[222]^=1; // Valid RS, deliberately invalid frame CRC.

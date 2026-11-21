@@ -20,6 +20,8 @@
 #include <QBuffer>
 #include <QMimeData>
 #include <QProgressBar>
+#include <QPlainTextEdit>
+#include <QTextDocument>
 #include <QPushButton>
 #include <QSlider>
 #include <QTemporaryDir>
@@ -553,7 +555,7 @@ private slots:
         QVERIFY(!window.findChild<QPushButton*>("transmitButton")->isEnabled());
         QCOMPARE(state.starts, 0u);
     }
-    void beaconPhysicalModeIsReceiveOnlyAndRestoresImageMode() {
+    void beaconMessagesArriveThroughReceiverAndRestoreImageMode() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state; CaptureState capture;
         MainWindow window(std::make_unique<FakeOutput>(state), settings, std::make_unique<FakeCapture>(capture)); window.show();
         QTRY_VERIFY(capture.open); QCOMPARE(capture.chosen, std::string(systemDefaultAudioDevice));
@@ -563,7 +565,7 @@ private slots:
         modes->setCurrentIndex(index);
         QCOMPARE(modes->currentText(), QString("QO100 MM-Bake")); QCOMPARE(capture.sampleRate, 48000u);
         QCOMPARE(settings.value("modem/modulation").toString(), QString("mm-beacon"));
-        QVERIFY(window.findChild<QLabel*>("beaconPhysicalPage")->isVisible());
+        QVERIFY(window.findChild<QWidget*>("beaconPage")->isVisible());
         QVERIFY(!window.findChild<QWidget*>("imagePreview")->isVisible());
         QVERIFY(!window.findChild<QPushButton*>("transmitButton")->isEnabled());
         QVERIFY(!window.findChild<QCheckBox*>("waterfallId")->isEnabled());
@@ -573,7 +575,7 @@ private slots:
 #ifdef Q_OS_WIN
         fixture += ".exe";
 #endif
-        QProcess source; source.start(fixture, {"400", "clean", "65", "mm-beacon"});
+        QProcess source; source.start(fixture, {"400", "spots", "65", "mm-beacon"});
         QVERIFY(source.waitForFinished(10000)); QCOMPARE(source.exitCode(), 0);
         const auto audio = source.readAllStandardOutput(); QVERIFY(!audio.isEmpty());
         std::array<float, 4800> samples{};
@@ -584,12 +586,20 @@ private slots:
             QTest::qWait(3);
         }
         QTRY_VERIFY_WITH_TIMEOUT(window.findChild<QLabel*>("receiveStatistics")->text().contains("RX · Sync"), 5000);
+        auto* cwText = window.findChild<QPlainTextEdit*>("beaconCwText");
+        auto* dxText = window.findChild<QPlainTextEdit*>("beaconDxText");
+        QTRY_VERIFY(cwText->toPlainText().contains("DL1TEST")); QTRY_VERIFY(dxText->toPlainText().contains("VK9TEST"));
+        QVERIFY(cwText->toPlainText().contains("18 dB · 23 WPM"));
+        QVERIFY(dxText->toPlainText().contains("14025.0 kHz"));
+        QCOMPARE(cwText->document()->blockCount(), 1); QCOMPARE(dxText->document()->blockCount(), 1);
+        QVERIFY(window.findChild<QPlainTextEdit*>("beaconBulletinText")->toPlainText().isEmpty());
         if (qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT")) {
             QVERIFY(window.grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + ".beacon.png"));
             window.resize(640, 440); QTest::qWait(30);
             QVERIFY(window.grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + ".beacon-small.png"));
         }
         modes->setCurrentIndex(0);
+        QVERIFY(cwText->toPlainText().contains("DL1TEST")); // Mode changes retain the received text.
         QVERIFY(window.findChild<QWidget*>("imagePreview")->isVisible());
         QVERIFY(window.findChild<QPushButton*>("transmitButton")->isEnabled());
         window.findChild<QPushButton*>("transmitButton")->click(); QVERIFY(state.open);
@@ -600,7 +610,7 @@ private slots:
         settings.setValue("audio/input", "other-input"); settings.setValue("audio/output", "other");
         MainWindow window(std::make_unique<FakeOutput>(state), settings, std::make_unique<FakeCapture>(capture)); window.show();
         QTRY_VERIFY(capture.open); QCOMPARE(capture.chosen, std::string("other-input"));
-        QVERIFY(window.findChild<QLabel*>("beaconPhysicalPage")->isVisible());
+        QVERIFY(window.findChild<QWidget*>("beaconPage")->isVisible());
         QVERIFY(!window.findChild<QPushButton*>("transmitButton")->isEnabled());
     }
     void setupRefreshKeepsSelectionAndPersistsChoice() {
