@@ -34,6 +34,7 @@ struct TxModulator::Impl {
     }
 };
 TxModulator::TxModulator(Modulation mode) : impl_(std::make_unique<Impl>()) {
+    if (isBeacon(mode)) throw std::invalid_argument("MM-Bake ist ein reiner Empfangsmodus");
     if (liquid_libversion_number() != LIQUID_VERSION_NUMBER)
         throw std::runtime_error("liquid-dsp: header/library version mismatch");
     auto& d = *impl_;

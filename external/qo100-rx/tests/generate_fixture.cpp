@@ -25,9 +25,9 @@ int main(int argc, char** argv) {
     schifra::make_sequential_root_generator_polynomial(field,120,32,generator);
     schifra::reed_solomon::encoder<255,32,223> encoder(field,generator);
     const std::string modulation = argc > 4 ? argv[4] : "8apsk";
-    if (modulation != "8apsk" && modulation != "qpsk4410") return 2;
+    if (modulation != "8apsk" && modulation != "qpsk4410" && modulation != "mm-beacon") return 2;
     const unsigned bps = modulation == "qpsk4410" ? 2 : 3;
-    const unsigned rate = bps == 2 ? 44100 : 48000, k = bps == 2 ? 20 : 24;
+    const unsigned rate = bps == 2 ? 44100 : 48000, k = bps == 2 || modulation == "mm-beacon" ? 20 : 24;
     auto mod=modem_create(bps == 2 ? LIQUID_MODEM_QPSK : LIQUID_MODEM_APSK8);
     float h[721];
     liquid_firdes_prototype(LIQUID_FIRFILT_RRC,k,15,0.2f,-0.2f,h);

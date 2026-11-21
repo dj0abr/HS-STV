@@ -33,6 +33,7 @@
 #include <thread>
 #include <random>
 #include <cmath>
+#include <cstring>
 using namespace mm_sstv;
 struct State {
     std::vector<AudioDevice> devices{{"other", "Other output"}, {"toQO100", "toQO100"}};
@@ -327,7 +328,7 @@ private slots:
             QVERIFY(window.findChild<QComboBox*>("modulation")->currentText().contains("6000 bit/s"));
             QTest::qWait(50);
             const auto screenshot = qEnvironmentVariable("MM_SSTV_SCREENSHOT", dir.filePath("window.png")); QVERIFY(window.grab().save(screenshot));
-            QTest::mouseClick(button, Qt::LeftButton); QCOMPARE(state.chosen, std::string("toQO100"));
+            QTest::mouseClick(button, Qt::LeftButton); QCOMPARE(state.chosen, std::string(systemDefaultAudioDevice));
             QCOMPARE(button->text(), QString("STOP")); QVERIFY(state.open);
             QVERIFY(!window.findChild<QComboBox*>("imageSize")->isEnabled());
             QTest::mouseClick(button, Qt::LeftButton); QCOMPARE(button->text(), QString("Senden")); QVERIFY(!state.open);
@@ -546,10 +547,61 @@ private slots:
     }
     void noImplicitFallback() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
+        settings.setValue("audio/output", "missing-explicit-device");
         state.devices = {{"other", "Other output"}};
         MainWindow window(std::make_unique<FakeOutput>(state), settings); QVERIFY(window.loadImage(picture(dir)));
         QVERIFY(!window.findChild<QPushButton*>("transmitButton")->isEnabled());
         QCOMPARE(state.starts, 0u);
+    }
+    void beaconPhysicalModeIsReceiveOnlyAndRestoresImageMode() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state; CaptureState capture;
+        MainWindow window(std::make_unique<FakeOutput>(state), settings, std::make_unique<FakeCapture>(capture)); window.show();
+        QTRY_VERIFY(capture.open); QCOMPARE(capture.chosen, std::string(systemDefaultAudioDevice));
+        const auto path = picture(dir); QVERIFY(window.loadImage(path));
+        auto* modes = window.findChild<QComboBox*>("modulation");
+        const auto index = modes->findData(int(Modulation::MmBeacon)); QVERIFY(index >= 0);
+        modes->setCurrentIndex(index);
+        QCOMPARE(modes->currentText(), QString("QO100 MM-Bake")); QCOMPARE(capture.sampleRate, 48000u);
+        QCOMPARE(settings.value("modem/modulation").toString(), QString("mm-beacon"));
+        QVERIFY(window.findChild<QLabel*>("beaconPhysicalPage")->isVisible());
+        QVERIFY(!window.findChild<QWidget*>("imagePreview")->isVisible());
+        QVERIFY(!window.findChild<QPushButton*>("transmitButton")->isEnabled());
+        QVERIFY(!window.findChild<QCheckBox*>("waterfallId")->isEnabled());
+        QVERIFY(!window.findChild<QAction*>("openImage")->isEnabled()); QVERIFY(!window.loadImage(path));
+        window.findChild<QPushButton*>("transmitButton")->click(); QCOMPARE(state.starts, 0u);
+        QString fixture = QCoreApplication::applicationDirPath() + "/test_rx_fixture";
+#ifdef Q_OS_WIN
+        fixture += ".exe";
+#endif
+        QProcess source; source.start(fixture, {"400", "clean", "65", "mm-beacon"});
+        QVERIFY(source.waitForFinished(10000)); QCOMPARE(source.exitCode(), 0);
+        const auto audio = source.readAllStandardOutput(); QVERIFY(!audio.isEmpty());
+        std::array<float, 4800> samples{};
+        for (int at = 0; at < audio.size();) {
+            const auto bytes = std::min(int(sizeof(samples)), int(audio.size()) - at);
+            std::memcpy(samples.data(), audio.constData() + at, std::size_t(bytes));
+            capture.consume(samples.data(), std::size_t(bytes) / sizeof(float)); at += bytes;
+            QTest::qWait(3);
+        }
+        QTRY_VERIFY_WITH_TIMEOUT(window.findChild<QLabel*>("receiveStatistics")->text().contains("RX · Sync"), 5000);
+        if (qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT")) {
+            QVERIFY(window.grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + ".beacon.png"));
+            window.resize(640, 440); QTest::qWait(30);
+            QVERIFY(window.grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + ".beacon-small.png"));
+        }
+        modes->setCurrentIndex(0);
+        QVERIFY(window.findChild<QWidget*>("imagePreview")->isVisible());
+        QVERIFY(window.findChild<QPushButton*>("transmitButton")->isEnabled());
+        window.findChild<QPushButton*>("transmitButton")->click(); QVERIFY(state.open);
+    }
+    void beaconModeAndExplicitAudioDevicesAreRestored() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state; CaptureState capture;
+        settings.setValue("modem/modulation", "mm-beacon");
+        settings.setValue("audio/input", "other-input"); settings.setValue("audio/output", "other");
+        MainWindow window(std::make_unique<FakeOutput>(state), settings, std::make_unique<FakeCapture>(capture)); window.show();
+        QTRY_VERIFY(capture.open); QCOMPARE(capture.chosen, std::string("other-input"));
+        QVERIFY(window.findChild<QLabel*>("beaconPhysicalPage")->isVisible());
+        QVERIFY(!window.findChild<QPushButton*>("transmitButton")->isEnabled());
     }
     void setupRefreshKeepsSelectionAndPersistsChoice() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
@@ -558,12 +610,12 @@ private slots:
             auto* dialog = window.findChild<QDialog*>(); QVERIFY(dialog);
             auto* outputs = dialog->findChild<QComboBox*>("outputDevice");
             QTRY_VERIFY(dialog->findChild<QPushButton*>("refreshDevices")->isEnabled());
-            QCOMPARE(outputs->currentData().toString(), QString("toQO100"));
+            QCOMPARE(outputs->currentData().toString(), QString::fromLatin1(systemDefaultAudioDevice));
             state.devices.push_back({"new-output", "New output"});
             dialog->findChild<QPushButton*>("refreshDevices")->click();
             QTRY_VERIFY(dialog->findChild<QPushButton*>("refreshDevices")->isEnabled());
             QVERIFY(outputs->findData("new-output") >= 0);
-            QCOMPARE(outputs->currentData().toString(), QString("toQO100"));
+            QCOMPARE(outputs->currentData().toString(), QString::fromLatin1(systemDefaultAudioDevice));
             QVERIFY(!dialog->findChild<QSlider*>("outputLevel"));
             window.findChild<QSlider*>("outputLevel")->setValue(60);
             outputs->setCurrentIndex(outputs->findData("other")); dialog->reject();
@@ -624,7 +676,7 @@ private slots:
         settings.setValue("receive/enabled", false); // Old pause preference must no longer disable reception.
         {
             MainWindow window(std::make_unique<FakeOutput>(state), settings, std::make_unique<FakeCapture>(capture)); window.show();
-            QVERIFY(window.loadImage(picture(dir))); QTRY_VERIFY(capture.open); QCOMPARE(capture.chosen, std::string("fromQO100"));
+            QVERIFY(window.loadImage(picture(dir))); QTRY_VERIFY(capture.open); QCOMPARE(capture.chosen, std::string(systemDefaultAudioDevice));
             auto* send = window.findChild<QPushButton*>("transmitButton"); send->click(); QVERIFY(state.open); QVERIFY(capture.open);
             QImage image(400, 200, QImage::Format_RGB32); image.fill(QColor(20, 40, 230));
             const auto prepared = preparePicture(image, QSize(640, 480)); ImageAudio signal(prepareImage(prepared.jpeg, "Rundfunkmuseum_Besichtigung_Cham_Radio_Sender.jpg"));

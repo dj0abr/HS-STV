@@ -14,8 +14,9 @@ cd HS-STV
 ./start.sh
 ```
 
-Das Programm beginnt ohne Aussendung. Der Audioausgang ist standardmäßig
-`toQO100`; eine gespeicherte Geräte- und Pegeleinstellung wird wiederverwendet.
+Das Programm beginnt ohne Aussendung. Ein- und Ausgang verwenden ohne gespeicherte
+Geräteauswahl den **System-Standard**. Eine gespeicherte Geräte- und Pegeleinstellung
+wird wiederverwendet.
 Unter **Setup → Soundkarten…** werden Audioeingang und Audioausgang ausgewählt.
 Der **Pegelregler direkt neben dem TX-Bild** bleibt auch während einer Sendung bedienbar.
 **Bei 8APSK/QPSK entsprechen 100 % digitaler Vollaussteuerung.** Bei SSTV
@@ -44,10 +45,10 @@ Größe des übertragenen Bildes bleibt davon unabhängig.
 
 ## Empfangen
 
-Der Empfang startet automatisch mit dem Eingang **fromQO100**. Im Setup lassen
-sich Audioeingang und Audioausgang getrennt auswählen. Der Eingang muss vom
-laufenden QO100_TRX2-Audioadapter bereitgestellt werden; für `fromQO100` die
-gewünschte Frequenz im **RX2**-Kanal einstellen.
+Der Empfang startet automatisch mit dem **System-Standardeingang** oder dem
+gespeicherten Gerät. Im Setup lassen sich Audioeingang und Audioausgang getrennt
+auswählen. Bei Verwendung des QO100_TRX2-Audioadapters kann **fromQO100** gewählt
+werden; dafür die gewünschte Frequenz im **RX2**-Kanal einstellen.
 
 Rechts im Fenster erscheinen Pilot-/Daten-Synchronisation und das empfangene Bild.
 Die Anzeige wächst während der Übertragung blockweise. Fehlende Blöcke bleiben
@@ -97,6 +98,13 @@ verwendet 48 kHz, 2000 Symbole/s und etwa 2400 Hz Datenbandbreite. Die Software
 stellt die Audioadapter automatisch passend ein. Der 100-Hz-Referenzträger und
 100 % als digitale Vollaussteuerung bleiben erhalten.
 [Technik und Prüfungen von QPSK 4410](docs/QPSK4410.md).
+
+## QO100 MM-Bake – erste Teststufe
+
+Die neue Auswahl **QO100 MM-Bake** ist ein reiner Empfangsmodus mit **8APSK ·
+7200 bit/s**. Die erste Stufe zeigt Pilot/AFC, Spektrum, Konstellation und gültige
+Frames; die Textdekodierung folgt nach dem Stationstest.
+[Testanleitung und weitere Stufen](docs/MM-BAKE.md).
 
 ## SSTV Martin 1/2 und Scottie 1/2
 

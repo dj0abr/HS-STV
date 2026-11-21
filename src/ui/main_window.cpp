@@ -31,6 +31,7 @@
 #include <QSignalBlocker>
 #include <QScopedValueRollback>
 #include <QTimer>
+#include <QStackedWidget>
 #include <QVBoxLayout>
 #include <algorithm>
 #include <cmath>
@@ -68,11 +69,11 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     : transmitter_(std::move(output)), settings_(settings), receiver_(std::move(input)) {
     setWindowTitle("HS-STV · Bilder senden und empfangen"); setMinimumSize(640, 440);
     const auto savedMode = settings_.value("modem/modulation", "8apsk").toString();
-    for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410, Modulation::Martin1, Modulation::Martin2, Modulation::Scottie1, Modulation::Scottie2})
+    for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410, Modulation::Martin1, Modulation::Martin2, Modulation::Scottie1, Modulation::Scottie2, Modulation::MmBeacon})
         if (savedMode == modeKey(mode)) mode_ = mode;
     overlay_ = loadTextOverlay(settings_);
-    inputDevice_ = settings_.value("audio/input", "fromQO100").toString().toStdString();
-    device_ = settings_.value("audio/output", "toQO100").toString().toStdString();
+    inputDevice_ = settings_.value("audio/input", systemDefaultAudioDevice).toString().toStdString();
+    device_ = settings_.value("audio/output", systemDefaultAudioDevice).toString().toStdString();
     level_ = std::clamp(settings_.value("audio/level", 35).toInt(), 0, 100);
     transmitter_.setLevel(level_);
     auto* file = menuBar()->addMenu("Bild");
@@ -87,7 +88,9 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     connect(audio, &QAction::triggered, this, [this] { setup(); });
     auto* central = new QWidget(this); auto* layout = new QVBoxLayout(central);
     layout->setContentsMargins(6, 6, 6, 6); layout->setSpacing(6);
-    auto* panes = new QGridLayout; panes->setHorizontalSpacing(6); panes->setVerticalSpacing(4);
+    contentPages_ = new QStackedWidget(central);
+    auto* imagePage = new QWidget(contentPages_);
+    auto* panes = new QGridLayout(imagePage); panes->setContentsMargins(0, 0, 0, 0); panes->setHorizontalSpacing(6); panes->setVerticalSpacing(4);
     panes->setColumnStretch(0, 1); panes->setColumnStretch(1, 1); panes->setRowStretch(1, 1);
     auto* sendHeader = new QHBoxLayout; sendHeader->setSpacing(4);
     overlayEdit_ = new QPushButton("Text…", central); overlayEdit_->setObjectName("overlayEditButton");
@@ -147,7 +150,13 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     };
     styleProgress(progress_, "#e76969"); styleProgress(receiveProgress_, "#5ab875");
     panes->addWidget(progress_, 3, 0); panes->addWidget(receiveProgress_, 3, 1);
-    layout->addLayout(panes, 1);
+    contentPages_->addWidget(imagePage);
+    auto* beaconPage = new QLabel("QO100 MM-Bake · Empfangstest\n\n8APSK · 7200 bit/s · 48 kHz\n\n"
+        "Pilot, AFC und Konstellation unten prüfen.\n"
+        "Grüne Punkte und „Sync“ bestätigen FEC-/CRC-gültige Frames.\n\n"
+        "CW-Skimmer, DX-Cluster und Bulletins folgen in den nächsten Teststufen.", contentPages_);
+    beaconPage->setObjectName("beaconPhysicalPage"); beaconPage->setAlignment(Qt::AlignCenter); beaconPage->setWordWrap(true);
+    contentPages_->addWidget(beaconPage); layout->addWidget(contentPages_, 1);
     receiveStatistics_ = new CompactLabel(central, Qt::ElideRight); receiveStatistics_->setObjectName("receiveStatistics");
     auto statisticsFont = receiveStatistics_->font(); statisticsFont.setPointSizeF(9); receiveStatistics_->setFont(statisticsFont);
     receiveStatistics_->setText("RX · Warte auf Audiodaten"); layout->addWidget(receiveStatistics_);
@@ -185,11 +194,11 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     auto* footer = new QHBoxLayout; footer->setSpacing(8);
     status_ = new CompactLabel(central, Qt::ElideRight); status_->setObjectName("statusText"); footer->addWidget(status_, 1);
     modes_ = new QComboBox(central); modes_->setObjectName("modulation");
-    for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410, Modulation::Martin1, Modulation::Martin2, Modulation::Scottie1, Modulation::Scottie2})
-        modes_->addItem(isSstv(mode) ? QString("SSTV %1").arg(modulationName(mode)) :
+    for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410, Modulation::Martin1, Modulation::Martin2, Modulation::Scottie1, Modulation::Scottie2, Modulation::MmBeacon})
+        modes_->addItem(isBeacon(mode) ? QStringLiteral("QO100 MM-Bake") : isSstv(mode) ? QString("SSTV %1").arg(modulationName(mode)) :
             QString("%1 · %2 bit/s").arg(modulationName(mode)).arg(parameters(mode).bitRate()), int(mode));
     modes_->setCurrentIndex(modes_->findData(int(mode_)));
-    modes_->setToolTip("Modus für Senden und Empfang; beide Stationen gleich einstellen.\n8APSK/QPSK: HS-Modem-kompatibel mit 100-Hz-Referenzträger.\nSSTV Martin 1/2 und Scottie 1/2: 320 × 256 Pixel, Sync 1200 Hz, Bildsignal 1500–2300 Hz.");
+    modes_->setToolTip("Modus für Senden und Empfang; beide Stationen gleich einstellen.\n8APSK/QPSK: HS-Modem-kompatibel mit 100-Hz-Referenzträger.\nSSTV Martin 1/2 und Scottie 1/2: 320 × 256 Pixel.\nQO100 MM-Bake: nur Empfang, 8APSK mit 7200 bit/s.");
     waterfallId_ = new QCheckBox("Waterfall-ID", central); waterfallId_->setObjectName("waterfallId");
     waterfallId_->setChecked(settings_.value("transmit/waterfallId", false).toBool());
     waterfallId_->setToolTip("Vor jeder Bildsendung HS-STV und die gewählte Betriebsart als Wasserfalltext senden.\nSSTV: Kennung 10 dB über dem eingestellten Bildpegel · Digital: keine Pegelanhebung.\nDer Pegelregler wirkt auch auf die Kennung; STOP bricht die gesamte Sendung ab.");
@@ -241,17 +250,24 @@ MainWindow::~MainWindow() {
     transmitter_.stop(); receiver_.stop(); archiveSstv();
 }
 bool MainWindow::deviceAvailable() const {
+    if (device_ == systemDefaultAudioDevice) return !devices_.empty();
     return std::any_of(devices_.begin(), devices_.end(), [this](const auto& d) { return d.id == device_; });
 }
 void MainWindow::updateButton() {
     const bool running = transmitter_.running();
+    const bool beacon = isBeacon(mode_);
+    contentPages_->setCurrentIndex(beacon ? 1 : 0);
     start_->setText(running ? "STOP" : "Senden");
-    start_->setEnabled(running || (!deviceScan_.valid() && deviceAvailable() && (image_.has_value() || bool(sstvImage_))));
+    start_->setEnabled(!beacon && (running || (!deviceScan_.valid() && deviceAvailable() && (image_.has_value() || bool(sstvImage_)))));
     overlayEdit_->setEnabled(!running); overlayAction_->setEnabled(!running); overlaySlots_->setEnabled(!running);
-    waterfallId_->setEnabled(!running); modes_->setEnabled(!running && !deviceScan_.valid()); sizes_->setEnabled(!running && !isSstv(mode_)); preview_->setEditable(!running); open_->setEnabled(!running);
+    waterfallId_->setEnabled(!running && !beacon); waterfallId_->setVisible(!beacon);
+    modes_->setEnabled(!running && !deviceScan_.valid()); sizes_->setEnabled(!running && !isSstv(mode_) && !beacon);
+    preview_->setEditable(!running && !beacon); open_->setEnabled(!running && !beacon);
+    overlayAction_->setEnabled(!running && !beacon);
 }
 void MainWindow::showReady() {
-    if (deviceAvailable()) status_->setText("Bereit · " + QString::fromStdString(device_) + " · " + QString::number(level_) + " %");
+    if (isBeacon(mode_)) status_->setText("QO100 MM-Bake · 8APSK · 7200 bit/s · nur Empfang");
+    else if (deviceAvailable()) status_->setText("Bereit · " + (device_ == systemDefaultAudioDevice ? QStringLiteral("System-Standard") : QString::fromStdString(device_)) + " · " + QString::number(level_) + " %");
     else status_->setText("Ausgang „" + QString::fromStdString(device_) + "“ nicht verfügbar. Bitte unter Setup auswählen oder aktualisieren.");
     updateButton();
 }
@@ -306,6 +322,7 @@ void MainWindow::retryJpegSaves() {
     }
 }
 void MainWindow::toggle() {
+    if (isBeacon(mode_)) return;
     if (transmitter_.running()) { transmitter_.stop(); showReady(); return; }
     try {
         if (isSstv(mode_)) {
@@ -342,7 +359,7 @@ void MainWindow::chooseImage() {
     if (!path.isEmpty()) loadImage(path);
 }
 bool MainWindow::loadImage(const QString& filename) {
-    if (transmitter_.running()) return false;
+    if (transmitter_.running() || isBeacon(mode_)) return false;
     QImageReader reader(filename); reader.setAutoTransform(true);
     const auto size = reader.size();
     if (size.isValid() && qint64(size.width()) * size.height() > 40000000) {
@@ -355,6 +372,7 @@ bool MainWindow::loadImage(const QString& filename) {
 }
 void MainWindow::prepare() {
     image_.reset(); sstvImage_.reset(); progress_->setValue(0);
+    if (isBeacon(mode_)) { showReady(); return; }
     if (original_.isNull()) { updateButton(); return; }
     const double idSeconds = waterfallId_->isChecked() ? double(waterfallIdSamples(mode_)) / modeSampleRate(mode_) : 0;
     try {
@@ -435,6 +453,7 @@ void MainWindow::restoreDisplayRange() {
     syncDisplayRange(); saveDisplayRange();
 }
 void MainWindow::receivedImage(const ReceivedImage& image) {
+    if (isBeacon(mode_)) return;
     if (image.newImage) {
         archiveSstv(); receivedSstv_ = {}; receivedRows_.reset(); receivedJpeg_.clear(); previewJpeg_.clear(); receivePreview_->setImage({});
     }
@@ -502,7 +521,8 @@ void MainWindow::showReceiveStatistics(const ReceiveStatus& status) {
             "Bei VIS-Empfang werden am Bildende alle 256 erwarteten Zeilensyncs berücksichtigt;\n"
             "beim Teileinstieg ohne VIS nur die seit dem Einstieg ausgewerteten Zeilen.");
     } else {
-        receiveStatistics_->setText(QString("RX · AFC %1 Hz · OK %2 · CRC %3 · FEC korr. %4")
+        const auto prefix = isBeacon(status.modulation) ? QString("RX · %1").arg(status.locked ? QStringLiteral("Sync") : status.state) : QStringLiteral("RX");
+        receiveStatistics_->setText(prefix + QString(" · AFC %1 Hz · OK %2 · CRC %3 · FEC korr. %4")
             .arg(status.offset, 0, 'f', 1).arg(qulonglong(status.frames)).arg(qulonglong(status.crcFailures))
             .arg(qulonglong(status.fecCorrectedFrames)));
         receiveStatistics_->setToolTip(QString("Seit dem Start des Empfangs bzw. Eingangs-/Moduswechsel:\n"
@@ -536,6 +556,7 @@ void MainWindow::setup() {
     inputs->setMinimumContentsLength(25); inputs->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     auto populateInputs = [&] {
         const QSignalBlocker blocker(inputs); inputs->clear();
+        inputs->addItem("System-Standard", QString::fromLatin1(systemDefaultAudioDevice));
         try {
             for (const auto& device : inputDevices_) {
                 auto name = QString::fromStdString(device.name);
@@ -555,6 +576,7 @@ void MainWindow::setup() {
     auto populate = [&] {
         const QSignalBlocker blocker(outputs);
         outputs->clear();
+        outputs->addItem("System-Standard", QString::fromLatin1(systemDefaultAudioDevice));
         for (const auto& d : devices_) {
             auto label = QString::fromStdString(d.name);
             if (d.name != d.id) label += " [" + QString::fromStdString(d.id) + "]";
@@ -567,7 +589,10 @@ void MainWindow::setup() {
     populate();
     const bool running = transmitter_.running(); outputs->setEnabled(!running); refresh->setEnabled(!running);
     layout->addLayout(form);
-    const auto description = isSstv(mode_) ? QString("48 kHz · Mono · SSTV %1 · 320 × 256 Pixel\n100 % = angepasster SSTV-Maximalpegel (−12,5 dBFS Spitze).\nSync 1200 Hz · Bildsignal 1500–2300 Hz.").arg(modulationName(mode_)) :
+    const auto description = isBeacon(mode_) ? QStringLiteral("48 kHz · Mono · 8APSK 7200 bit/s · nur Empfang\n"
+        "Audioeingang auf die Bake abstimmen; vollständiges Signal samt Pilot erfassen.\n"
+        "System-Standard wird beim Öffnen des Audiostreams aufgelöst.") :
+        isSstv(mode_) ? QString("48 kHz · Mono · SSTV %1 · 320 × 256 Pixel\n100 % = angepasster SSTV-Maximalpegel (−12,5 dBFS Spitze).\nSync 1200 Hz · Bildsignal 1500–2300 Hz.").arg(modulationName(mode_)) :
         QString("%1 kHz · Mono · %2 %3 bit/s\n100 % = digitale Vollaussteuerung.\nDaten und %4-Hz-Referenzträger werden gemeinsam geregelt.")
         .arg(parameters(mode_).sampleRate / 1000., 0, 'f', 1).arg(modulationName(mode_)).arg(parameters(mode_).bitRate()).arg(TxModulator::pilotHz);
     auto* info = new QLabel(description, &dialog);

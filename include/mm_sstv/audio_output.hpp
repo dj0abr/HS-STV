@@ -8,13 +8,15 @@
 #include <vector>
 
 namespace mm_sstv {
+// Resolve the OS default when opening a stream; keep that device for its lifetime.
+inline constexpr const char* systemDefaultAudioDevice = "@system-default";
 struct AudioDevice { std::string id; std::string name; };
 class AudioOutput {
 public:
     using Render = std::function<std::size_t(float*, std::size_t)>;
     virtual ~AudioOutput() = default;
     virtual std::vector<AudioDevice> devices() = 0;
-    // Exact device ID, never an implicit fallback to a different sound card.
+    // Exact device ID or systemDefaultAudioDevice; no fallback for an explicit ID.
     // Render runs serially on the audio thread, mono float at the requested sample rate.
     // Return 0..capacity frames. A short block ends input and drains playback.
     virtual void start(const std::string& device, Render render, unsigned sampleRate = 48000) = 0;

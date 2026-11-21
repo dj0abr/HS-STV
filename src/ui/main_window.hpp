@@ -18,6 +18,7 @@ class QSlider;
 class QAction;
 class QProgressBar;
 class QTimer;
+class QStackedWidget;
 namespace mm_sstv {
 class ImagePanel;
 class ReceiveMonitor;
@@ -106,6 +107,7 @@ private:
     QLabel* status_ = nullptr;
     QLabel* imageInfo_ = nullptr;
     QProgressBar* progress_ = nullptr;
+    QStackedWidget* contentPages_ = nullptr;
     QAction* open_ = nullptr;
 };
 }

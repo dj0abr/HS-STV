@@ -31,8 +31,9 @@ int main(int argc, char** argv) {
         else if (std::string(argv[i]) == "--modulation" && i+1 < argc) {
             const std::string value = argv[++i];
             if (value == "8apsk") modulation = mm_sstv::Modulation::Apsk8;
+            else if (value == "mm-beacon") modulation = mm_sstv::Modulation::MmBeacon;
             else if (value == "qpsk4410") modulation = mm_sstv::Modulation::Qpsk4410;
-            else { fprintf(stderr, "Modulation must be 8apsk or qpsk4410\n"); return 2; }
+            else { fprintf(stderr, "Modulation must be 8apsk, qpsk4410 or mm-beacon\n"); return 2; }
         }
         else if (std::string(argv[i]) == "--input-rate" && i+1 < argc) {
             std::string value = argv[++i];
@@ -49,7 +50,7 @@ int main(int argc, char** argv) {
                 fprintf(stderr, "Invalid center frequency\n"); return 2;
             }
         } else {
-            fprintf(stderr, "Usage: rx_probe [--manual] [--center-hz 1500] [--input-rate 48000|44100|12000] [--monitor] [--modulation 8apsk|qpsk4410] < mono-float32le.raw\n");
+            fprintf(stderr, "Usage: rx_probe [--manual] [--center-hz 1500] [--input-rate 48000|44100|12000] [--monitor] [--modulation 8apsk|qpsk4410|mm-beacon] < mono-float32le.raw\n");
             return 2;
         }
     }
@@ -57,7 +58,7 @@ int main(int argc, char** argv) {
     bitsPerSymbol = mode.bitsPerSymbol; constellationSize = 1u << bitsPerSymbol; speed = mode.bitRate();
     const auto preDecimation = mode.rxDecimation;
     const double rate = mode.sampleRate, pllRate = mode.pllSampleRate();
-    const auto scheme = modulation == mm_sstv::Modulation::Apsk8 ? LIQUID_MODEM_APSK8 : LIQUID_MODEM_QPSK;
+    const auto scheme = mode.bitsPerSymbol == 3 ? LIQUID_MODEM_APSK8 : LIQUID_MODEM_QPSK;
     PilotDetector detector(mode.sampleRate);
     auto monitor = monitor_enabled ? std::make_unique<mm_sstv::AudioSpectrum>(mode.sampleRate) : nullptr;
     double trial_start = -1, trial_hz = 0, previous_candidate = -1, lock_started = -1;
@@ -83,7 +84,7 @@ int main(int argc, char** argv) {
     const size_t block = input_rate/10;
     float input_buffer[4800], buffer[19264];
     while (true) {
-        // fread may wait for a full block. PulseAudio is read independently by Python.
+        // Audio capture runs independently in the application's input thread.
         size_t bytes = fread(input_buffer, 1, block*sizeof(float), stdin);
         if (bytes % sizeof(float)) {
             fprintf(stderr, "Truncated float32 audio sample\n"); return 2;
@@ -238,7 +239,7 @@ int main(int argc, char** argv) {
                    automatic ? "true" : "false",afc_state,center,center-1500,measured_pilot);
             for (size_t j = 0; j < points.size(); ++j)
                 printf("%s[%.4f,%.4f]", j ? "," : "", points[j].real, points[j].imag);
-            printf("],\"modulation\":\"%s\",\"bit_rate\":%d", bitsPerSymbol == 2 ? "qpsk4410" : "8apsk", speed);
+            printf("],\"modulation\":\"%s\",\"bit_rate\":%d", mm_sstv::modeKey(modulation), speed);
             if (monitor) {
                 const auto spectrum = monitor->levels();
                 printf(",\"spectrum_bin_hz\":%.8f,\"spectrum_dbfs\":[", monitor->frequencyStep());

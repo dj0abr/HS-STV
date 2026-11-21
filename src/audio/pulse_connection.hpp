@@ -40,6 +40,23 @@ struct PulseConnection {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
+    std::string defaultDevice(bool capture) {
+        struct Query { bool capture; std::string name; bool done = false; } query{capture, {}, false};
+        auto* operation = pa_context_get_server_info(context, [](pa_context*, const pa_server_info* info, void* data) {
+            auto& q = *static_cast<Query*>(data);
+            if (info) {
+                const char* name = q.capture ? info->default_source_name : info->default_sink_name;
+                if (name) q.name = name;
+            }
+            q.done = true;
+        }, &query);
+        if (!operation) fail();
+        try { wait([&] { return query.done; }); }
+        catch (...) { pa_operation_cancel(operation); pa_operation_unref(operation); throw; }
+        pa_operation_unref(operation);
+        if (query.name.empty()) throw std::runtime_error("Kein System-Standardgerät verfügbar");
+        return query.name;
+    }
     std::vector<AudioDevice> devices(bool capture = false) {
         struct Query { std::vector<AudioDevice> result; int done = 0; } query;
         auto sink = [](pa_context*, const pa_sink_info* info, int end, void* data) {

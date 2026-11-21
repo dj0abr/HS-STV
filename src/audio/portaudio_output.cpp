@@ -32,9 +32,11 @@ public:
         stop();
         { std::lock_guard<std::mutex> lock(errorMutex_); error_.clear(); }
         underruns_ = 0; finished_ = false; ending_ = false;
-        int found = -1;
+        const bool systemDefault = device == systemDefaultAudioDevice;
+        int found = systemDefault ? Pa_GetDefaultOutputDevice() : paNoDevice;
         const auto count = Pa_GetDeviceCount(); check(count);
         for (int i = 0; i < count; ++i) {
+            if (systemDefault) break;
             const auto* d = Pa_GetDeviceInfo(i);
             if (!d || d->maxOutputChannels < 1) continue;
             if (device == std::string(Pa_GetHostApiInfo(d->hostApi)->name) + ":" + d->name) {

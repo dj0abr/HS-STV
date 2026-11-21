@@ -11,6 +11,7 @@ Transmitter::Transmitter(std::unique_ptr<AudioOutput> output) : audio_(std::move
 }
 Transmitter::~Transmitter() { stop(); }
 void Transmitter::startTest(const std::string& device, bool validFrames, Modulation mode) {
+    if (isBeacon(mode)) throw std::invalid_argument("MM-Bake ist ein reiner Empfangsmodus");
     if (running_) return;
     if (device.empty()) throw std::invalid_argument("No output device selected");
     if (validFrames) source_ = std::make_unique<BerSymbols>(mode);
@@ -24,6 +25,7 @@ void Transmitter::startTest(const std::string& device, bool validFrames, Modulat
     } catch (...) { stop(); throw; }
 }
 void Transmitter::startImage(const std::string& device, ImageTransmission transmission, bool waterfallId) {
+    if (isBeacon(transmission.modulation)) throw std::invalid_argument("MM-Bake ist ein reiner Empfangsmodus");
     if (running_) return;
     if (device.empty()) throw std::invalid_argument("No output device selected");
     try {

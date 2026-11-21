@@ -25,8 +25,11 @@ public:
     }
     void start(const std::string& device, Consume consume, unsigned sampleRate) override {
         stop(); { std::lock_guard<std::mutex> lock(mutex_); error_.clear(); }
-        int found = -1; const auto count = Pa_GetDeviceCount(); check(count);
+        const bool systemDefault = device == systemDefaultAudioDevice;
+        int found = systemDefault ? Pa_GetDefaultInputDevice() : paNoDevice;
+        const auto count = Pa_GetDeviceCount(); check(count);
         for (int n = 0; n < count; ++n) {
+            if (systemDefault) break;
             const auto* d = Pa_GetDeviceInfo(n);
             if (d && d->maxInputChannels && device == std::string(Pa_GetHostApiInfo(d->hostApi)->name) + ":" + d->name) {
                 if (found != -1) throw std::runtime_error("Ambiguous audio input");

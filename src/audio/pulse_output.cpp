@@ -26,9 +26,10 @@ public:
         underruns_ = 0; finished_ = false; ending_ = false; stopping_ = false; render_ = std::move(render);
         try {
             connection_ = std::make_unique<Connection>();
+            const auto selected = device == systemDefaultAudioDevice ? connection_->defaultDevice(false) : device;
             const auto available = connection_->devices();
-            if (std::none_of(available.begin(), available.end(), [&](const auto& d) { return d.id == device; }))
-                throw std::runtime_error("Audioausgang nicht verfügbar: " + device);
+            if (std::none_of(available.begin(), available.end(), [&](const auto& d) { return d.id == selected; }))
+                throw std::runtime_error("Audioausgang nicht verfügbar: " + selected);
             const pa_sample_spec format{PA_SAMPLE_FLOAT32NE, sampleRate, 1};
             const std::string streamName = "hs-stv Bildsendung";
             stream_ = pa_stream_new(connection_->context, streamName.c_str(), &format, nullptr);
@@ -44,7 +45,7 @@ public:
             pa_cvolume volume; pa_cvolume_set(&volume, 1, PA_VOLUME_NORM);
             const auto flags = static_cast<pa_stream_flags_t>(PA_STREAM_ADJUST_LATENCY |
                 PA_STREAM_DONT_MOVE | PA_STREAM_START_CORKED);
-            if (pa_stream_connect_playback(stream_, device.c_str(), &buffer, flags, &volume, nullptr) < 0)
+            if (pa_stream_connect_playback(stream_, selected.c_str(), &buffer, flags, &volume, nullptr) < 0)
                 connection_->fail();
             connection_->wait([&] {
                 if (!error().empty()) throw std::runtime_error(error());
@@ -54,7 +55,7 @@ public:
             });
             // No fallback/migration to another sink, even if the device vanishes.
             const char* actual = pa_stream_get_device_name(stream_);
-            if (!actual || device != actual) throw std::runtime_error("Unerwarteter Audioausgang");
+            if (!actual || selected != actual) throw std::runtime_error("Unerwarteter Audioausgang");
             auto* op = pa_stream_cork(stream_, 0, nullptr, nullptr);
             if (!op) connection_->fail();
             pa_operation_unref(op);

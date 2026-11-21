@@ -138,7 +138,7 @@ void Receiver::readOutput() {
                 std::copy(rgb.begin(), rgb.end(), update.rgb.begin());
             } else continue;
             if (sstvReceived) sstvReceived(update);
-        } else if (event == "frame") {
+        } else if (event == "frame" && !isBeacon(mode_)) {
             const auto hex = json.value("payload_hex").toString().toLatin1(); if (hex.size() != 438) continue;
             const auto payload = QByteArray::fromHex(hex); if (payload.size() != 219) continue;
             ReceivedFrame frame; frame.type = json.value("frame_type").toInt(-1); frame.counter = json.value("frame_number").toInt(-1); frame.status = json.value("frame_info").toInt(-1);

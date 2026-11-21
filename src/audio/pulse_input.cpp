@@ -16,22 +16,23 @@ public:
         stopping_ = false; consume_ = std::move(consume);
         try {
             connection_ = std::make_unique<detail::PulseConnection>();
+            const auto selected = device == systemDefaultAudioDevice ? connection_->defaultDevice(true) : device;
             const auto devices = connection_->devices(true);
-            bool found = false; for (const auto& d : devices) found |= d.id == device;
-            if (!found) throw std::runtime_error("Audioeingang nicht verfügbar: " + device);
+            bool found = false; for (const auto& d : devices) found |= d.id == selected;
+            if (!found) throw std::runtime_error("Audioeingang nicht verfügbar: " + selected);
             const pa_sample_spec format{PA_SAMPLE_FLOAT32NE, sampleRate, 1};
             stream_ = pa_stream_new(connection_->context, "hs-stv Empfang", &format, nullptr);
             if (!stream_) connection_->fail();
             pa_stream_set_read_callback(stream_, read, this);
             const pa_buffer_attr buffer{sampleRate * 4 / 5, UINT32_MAX, UINT32_MAX, UINT32_MAX, sampleRate * 4 / 100};
-            if (pa_stream_connect_record(stream_, device.c_str(), &buffer,
+            if (pa_stream_connect_record(stream_, selected.c_str(), &buffer,
                     static_cast<pa_stream_flags_t>(PA_STREAM_ADJUST_LATENCY | PA_STREAM_DONT_MOVE)) < 0) connection_->fail();
             connection_->wait([&] {
                 const auto state = pa_stream_get_state(stream_);
                 if (!PA_STREAM_IS_GOOD(state)) connection_->fail();
                 return state == PA_STREAM_READY;
             });
-            if (!pa_stream_get_device_name(stream_) || device != pa_stream_get_device_name(stream_))
+            if (!pa_stream_get_device_name(stream_) || selected != pa_stream_get_device_name(stream_))
                 throw std::runtime_error("Unerwarteter Audioeingang");
             if (!error().empty()) throw std::runtime_error(error());
             worker_ = std::thread([this] {

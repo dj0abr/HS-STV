@@ -50,6 +50,7 @@ void validate(unsigned rate, unsigned rowMs) {
 }
 std::string waterfallIdText(Modulation mode) {
     switch (mode) {
+    case Modulation::MmBeacon: throw std::invalid_argument("MM-Bake ist ein reiner Empfangsmodus");
     case Modulation::Apsk8: return "HS-STV 8APSK";
     case Modulation::Qpsk4410: return "HS-STV QPSK";
     case Modulation::Martin1: return "HS-STV MARTIN1";
