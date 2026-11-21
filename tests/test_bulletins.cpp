@@ -64,6 +64,27 @@ private slots:
             QVERIFY(!result.bulletin->text.contains("evil")); QVERIFY(!result.bulletin->text.contains("<h3>"));
         }
     }
+    void htmlBulletinsPreserveSourceLineBreaks() {
+        const QString expected = QStringLiteral("Rundspruch\n\nErste Zeile & Grüße\nZweite Zeile\n\n- Thema eins\n- Thema zwei\n\nInfo (https://example.org/info)\nEnde");
+        for (const auto& newline : {QByteArray("\n"), QByteArray("\r\n"), QByteArray("\r")}) {
+            auto source = QStringLiteral("~R:8:37~\n<h3>Rundspruch</h3>\n<p style=\"font-size:12px\">\n\n"
+                "Erste Zeile &amp; Grüße\nZweite Zeile\n\n- Thema eins\n- Thema zwei\n\n"
+                "<a href=\"https://example.org/info\">Info</a><br>Ende\n</p>"
+                "<script>versteckt\nversteckt</script><style>p {color:red;}</style>").toUtf8();
+            source.replace("\n", newline);
+            BulletinAssembler rx; const auto result = feed(rx, frames(zip(source)));
+            QVERIFY(result.bulletin); QCOMPARE(result.bulletin->text, expected);
+            QTemporaryDir dir; BulletinArchive archive(dir.path());
+            QCOMPARE(archive.load(archive.save(*result.bulletin)).text, expected);
+        }
+    }
+    void plainTextAndPreformattedLineBreaks() {
+        for (const auto& source : {QByteArray("Zeile eins\r\n\r\nZeile zwei\rZeile drei"),
+                                  QByteArray("<pre>Zeile eins\n\nZeile zwei\nZeile drei</pre>")}) {
+            BulletinAssembler rx; const auto result = feed(rx, frames(zip(source)));
+            QVERIFY(result.bulletin); QCOMPARE(result.bulletin->text, QString("Zeile eins\n\nZeile zwei\nZeile drei"));
+        }
+    }
     void missingBlocksRepetitionsAndStreamReset() {
         BulletinAssembler rx; const auto input = frames(zip(longText())); QVERIFY(input.size() > 3);
         for (unsigned n = 0; n < input.size(); ++n) if (n != 2) QVERIFY(!rx.accept(input[n], at_).bulletin);

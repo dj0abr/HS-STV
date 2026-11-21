@@ -33,7 +33,12 @@ Bulletin decodeBulletin(const QString& filename, const QByteArray& zip, const QD
         // Drop hidden content before parsing, and refuse image/style resources.
         text.remove(QRegularExpression("<(script|style)\\b[^>]*>[\\s\\S]*?(?:</\\1\\s*>|$)",
                                        QRegularExpression::CaseInsensitiveOption));
-        PlainDocument document; document.setHtml(text);
+        PlainDocument document;
+        // Beacon bulletins mix HTML headings/links with line-oriented text
+        // inside <p>. Normal HTML whitespace handling would flatten the source
+        // line breaks and blank lines before they ever reach the archive/UI.
+        document.setDefaultStyleSheet("* { white-space: pre-wrap; }");
+        document.setHtml(text);
         struct Link { int first, last; QString href; };
         std::vector<Link> links;
         for (auto block = document.begin(); block.isValid(); block = block.next()) {

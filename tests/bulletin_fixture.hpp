@@ -61,6 +61,7 @@ inline std::vector<mm_sstv::ReceivedFrame> frames(const QByteArray& data, const 
     return result;
 }
 inline QByteArray content() {
-    return QStringLiteral("~B:1:MM-Bake Test~\r\n<h3>Test-Bulletin</h3><p>Grüße aus München &amp; 73.</p><script>evil()</script>").toUtf8();
+    return QStringLiteral("~B:1:MM-Bake Test~\r\n<h3>Test-Bulletin</h3><p>Grüße aus München &amp; 73.\r\n\r\n"
+                          "Nächster Abschnitt.\r\nWeitere Zeile.</p><script>evil()</script>").toUtf8();
 }
 }

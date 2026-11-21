@@ -634,6 +634,7 @@ private slots:
         auto* text = window.findChild<QPlainTextEdit*>("beaconBulletinText");
         QTRY_VERIFY_WITH_TIMEOUT(text->toPlainText().contains("Test-Bulletin"), 5000);
         QVERIFY(text->toPlainText().contains(QStringLiteral("Grüße aus München & 73.")));
+        QVERIFY(text->toPlainText().contains(QStringLiteral("73.\n\nNächster Abschnitt.\nWeitere Zeile.")));
         QVERIFY(!text->toPlainText().contains("evil"));
         QTRY_VERIFY(window.findChild<QLabel*>("beaconBulletinStatus")->text().contains("vollständig"));
         const auto entries = BulletinArchive().entries(); QCOMPARE(entries.size(), std::size_t(1));

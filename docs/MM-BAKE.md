@@ -132,8 +132,10 @@ einen späteren Windows-Build.
 
 UTF-8 und Windows-1252, Bulletin-Kategorie/Seitennummer/Titel sowie HTML-Klartext
 werden unterstützt. Script-/Style-Inhalte werden entfernt und HTML-Ressourcen
-nicht geladen. HTTP-/HTTPS-Linkziele bleiben im Klartext lesbar. Beim Eintreffen
-eines vollständig geprüften neuen Bulletins wird das rechte Textfenster von oben
+nicht geladen. HTTP-/HTTPS-Linkziele bleiben im Klartext lesbar. Auch die im
+Quelltext vorhandenen Zeilenumbrüche und Leerzeilen bleiben innerhalb
+von HTML-Absätzen erhalten (LF, CRLF und CR werden einheitlich dargestellt).
+Beim Eintreffen eines vollständig geprüften neuen Bulletins wird das rechte Textfenster von oben
 neu angezeigt. Duplikate versetzen die Leseposition nicht. Fortschritt oder
 Fehler stehen unter dem Bulletin; dabei bleibt der letzte gültige Text erhalten.
 
@@ -181,6 +183,9 @@ gilt nicht für das Archiv oder das Lesefenster.
 
 Gleicher Dateiname und Inhalt erzeugen keinen zweiten Eintrag. Eine geänderte
 Fassung desselben Dateinamens bleibt als eigene Version erhalten. Das Archiv
+aktualisiert bei erneutem Empfang auch die Klartextdarstellung, wenn eine
+Programmkorrektur diese verbessert; der Archiveintrag wird dabei ersetzt.
+Das Archiv
 bleibt nach einem Programmneustart verfügbar und ist in Git ausgeschlossen.
 Schreibfehler erscheinen unter der Vorschau; der gültige Text bleibt sichtbar,
 und eine erneute gültige Übertragung versucht das Speichern nochmals.

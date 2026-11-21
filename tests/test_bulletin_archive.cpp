@@ -42,6 +42,15 @@ private slots:
         QVERIFY(added); QVERIFY(first != second); QCOMPARE(archive.entries().size(), std::size_t(2));
         QCOMPARE(archive.entries()[0].id, second); QCOMPARE(archive.load(first).text, bulletin().text);
     }
+    void repeatedReceptionRepairsOldTextConversion() {
+        QTemporaryDir dir; BulletinArchive archive(dir.path()); auto original = bulletin("ANS-319.blt", "Absatz eins Absatz zwei");
+        const auto id = archive.save(original);
+        // The transmitted bytes/digest stay identical; only the decoder's text
+        // conversion changes after an update. Refresh the same archive record.
+        original.text = "Absatz eins\n\nAbsatz zwei";
+        bool added = false; QCOMPARE(archive.save(original, &added), id); QVERIFY(added);
+        QCOMPARE(archive.entries().size(), std::size_t(1)); QCOMPARE(archive.load(id).text, original.text);
+    }
     void pathsCorruptionAndWriteErrors() {
         QTemporaryDir dir; BulletinArchive archive(dir.filePath("bulletins")); auto original = bulletin("../../ANS-319.blt");
         const auto id = archive.save(original); QCOMPARE(QFileInfo(QDir(archive.directory()).filePath(id)).absolutePath(), archive.directory());
