@@ -10,6 +10,7 @@ Zusätzlich **SSTV Martin 1/2 und Scottie 1/2 · 320 × 256 Pixel** für Senden 
 ```bash
 git clone https://github.com/dj0abr/HS-STV.git
 cd HS-STV
+./prepare.sh
 ./start.sh
 ```
 
@@ -62,8 +63,8 @@ Die Konstellationspunkte erscheinen bei bestätigter Datensynchronisation grün.
 
 Nach vollständigem Bildempfang steht **Empfang abgeschlossen** unter dem Bild.
 Eine kompakte RX-Zeile zeigt AFC sowie bei digitalem Empfang gültige Frames,
-CRC-Fehler, FEC-korrigierte Frames und verworfene FEC-Kandidaten. Der Tooltip
-enthält zusätzlich die Zahl korrigierter RS-Bytes und erklärt die Zähler.
+CRC-Fehler und FEC-korrigierte Frames. Der Tooltip enthält zusätzlich die Zahl
+korrigierter RS-Bytes und nicht dekodierbarer FEC-Kandidaten und erklärt die Zähler.
 Bei SSTV erscheinen erkannte und nicht erkannte Zeilensyncs des aktuellen bzw.
 letzten Bildes. Bei fehlenden Syncs läuft die Bildausgabe mit dem internen
 Zeilentakt weiter; die Anzeige meldet **Bildempfang · Freilauf**.
@@ -191,14 +192,33 @@ Frequenz und PTT-/Stationssteuerung werden außerhalb von hs-stv eingestellt.
 
 ## Bauen und testen
 
-Die bereits vorhandenen Entwicklungsabhängigkeiten wurden verwendet. Für
-Debian/Ubuntu-basierte Linux-Systeme entsprechen sie etwa:
+Unter Debian, Ubuntu und Linux Mint installiert `prepare.sh` die Pakete für
+Bau und Betrieb sowie Python/NumPy für die Tests. Das Skript verwendet `apt-get`
+und fordert bei Bedarf über `sudo` Root-Rechte an:
 
 ```bash
-sudo apt install build-essential cmake pkg-config qtbase5-dev libpulse-dev python3-numpy pulseaudio-utils
+./prepare.sh
 ./build.sh -DPython3_EXECUTABLE=/usr/bin/python3
 ctest --test-dir build --output-on-failure
 ```
+
+Mit `./prepare.sh --dry-run` lässt sich die Installation ohne Änderungen anhand
+der vorhandenen Paketlisten simulieren. `./prepare.sh --portaudio` installiert
+zusätzlich `portaudio19-dev` für einen Build mit
+`./build.sh -DMM_SSTV_AUDIO_BACKEND=portaudio -DPython3_EXECUTABLE=/usr/bin/python3`.
+
+Enthalten sind insbesondere **glibc (`libc6`, `libc6-dev`)**, die C++-Laufzeit
+(`libstdc++6`), CMake, Compiler, Qt-5-Entwicklungsdateien samt Bildformat- und
+Wayland-Plugins, Schriften und die PulseAudio-Clientbibliothek.
+Ein vorhandener PulseAudio- oder PipeWire-Pulse-Server wird weiterverwendet;
+`prepare.sh` installiert keinen neuen Audioserver.
+
+Bei Meldungen wie `GLIBC_… not found` oder `GLIBCXX_… not found` kann ein auf
+einem neueren System gebautes Programm vorliegen. Nach `prepare.sh` mit
+`./build.sh -DPython3_EXECUTABLE=/usr/bin/python3` auf dem Zielsystem neu bauen;
+`start.sh` allein baut ein bereits vorhandenes Programm nicht erneut.
+Das Skript verwendet ausschließlich die konfigurierten Paketquellen der
+Distribution und installiert keine fremde glibc-Version.
 
 Der normale Build braucht keine Downloads und verwendet die beigelegte statische
 liquid-dsp-1.8.3-Bibliothek für Linux x86-64. Es gibt keine Build-Abhängigkeit von

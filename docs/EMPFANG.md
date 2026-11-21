@@ -259,8 +259,9 @@ Nach einem vollständig dekodierten Bild lautet die Bildstatuszeile
 
 Digitale Zähler gelten seit dem Start des Empfangskerns bzw. Eingangs- oder
 Moduswechsel: gültige Frames, CRC-Fehler nach FEC, mit FEC reparierte gültige
-Frames und verworfene FEC-Kandidaten. Der Tooltip nennt außerdem korrigierte
-RS-Bytes einschließlich Parität sowie die Zahl erkannter Headerkandidaten.
+Frames. Nicht dekodierbare FEC-Kandidaten stehen ausschließlich im Tooltip.
+Dieser nennt außerdem korrigierte RS-Bytes einschließlich Parität sowie die Zahl
+erkannter Headerkandidaten.
 Der bestehende Schifra-Wert `errors_corrected` wird ausgewertet; als repariert
 zählt ein Frame erst nach erfolgreicher CRC. Die Decodierung bleibt unverändert.
 

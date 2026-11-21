@@ -502,14 +502,14 @@ void MainWindow::showReceiveStatistics(const ReceiveStatus& status) {
             "Bei VIS-Empfang werden am Bildende alle 256 erwarteten Zeilensyncs berücksichtigt;\n"
             "beim Teileinstieg ohne VIS nur die seit dem Einstieg ausgewerteten Zeilen.");
     } else {
-        receiveStatistics_->setText(QString("RX · AFC %1 Hz · OK %2 · CRC %3 · FEC korr. %4 · FEC verw. %5")
+        receiveStatistics_->setText(QString("RX · AFC %1 Hz · OK %2 · CRC %3 · FEC korr. %4")
             .arg(status.offset, 0, 'f', 1).arg(qulonglong(status.frames)).arg(qulonglong(status.crcFailures))
-            .arg(qulonglong(status.fecCorrectedFrames)).arg(qulonglong(status.fecFailures)));
+            .arg(qulonglong(status.fecCorrectedFrames)));
         receiveStatistics_->setToolTip(QString("Seit dem Start des Empfangs bzw. Eingangs-/Moduswechsel:\n"
             "Gültige Frames: %1\nCRC-Fehler nach FEC: %2\nFEC-korrigierte gültige Frames: %3\n"
             "Korrigierte RS-Bytes (einschließlich Paritätsbytes): %4\nNicht dekodierbare FEC-Kandidaten: %5\n"
             "Headerkandidaten insgesamt: %6\n"
-            "FEC verw. zählt auch falsche Headerkandidaten bei Suche/Rauschen und ist keine sichere Zahl verlorener Bildblöcke.")
+            "Nicht dekodierbare FEC-Kandidaten umfassen auch falsche Headerkandidaten bei Suche/Rauschen und entsprechen nicht der Zahl verlorener Bildblöcke.")
             .arg(qulonglong(status.frames)).arg(qulonglong(status.crcFailures)).arg(qulonglong(status.fecCorrectedFrames))
             .arg(qulonglong(status.fecCorrectedBytes)).arg(qulonglong(status.fecFailures)).arg(qulonglong(status.headerCandidates)));
     }
