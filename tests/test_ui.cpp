@@ -3,6 +3,7 @@
 #include "image_panel.hpp"
 #include "receive_monitor.hpp"
 #include "overlay_editor.hpp"
+#include "bulletin_archive.hpp"
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
@@ -635,6 +636,16 @@ private slots:
         QVERIFY(text->toPlainText().contains(QStringLiteral("Grüße aus München & 73.")));
         QVERIFY(!text->toPlainText().contains("evil"));
         QTRY_VERIFY(window.findChild<QLabel*>("beaconBulletinStatus")->text().contains("vollständig"));
+        const auto entries = BulletinArchive().entries(); QCOMPARE(entries.size(), std::size_t(1));
+        QCOMPARE(entries[0].filename, QString("news.blt"));
+        QTest::mouseClick(text->viewport(), Qt::LeftButton);
+        auto* reader = window.findChild<QDialog*>("bulletinReader"); QVERIFY(reader); QVERIFY(reader->isVisible()); QVERIFY(!reader->isModal());
+        auto* choices = reader->findChild<QComboBox*>("bulletinArchiveChoice"); QTRY_COMPARE(choices->count(), 1);
+        QCOMPARE(reader->findChild<QPlainTextEdit*>("bulletinReaderText")->toPlainText(), text->toPlainText());
+        QVERIFY(choices->currentText().startsWith("news.blt"));
+        if (qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT"))
+            QVERIFY(reader->grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + ".bulletin-reader.png"));
+        QPointer<QDialog> closed(reader); reader->close(); QTRY_VERIFY(closed.isNull());
         QCOMPARE(state.starts, 0u);
         if (qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT"))
             QVERIFY(window.grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + ".bulletin.png"));

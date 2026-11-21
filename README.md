@@ -107,6 +107,11 @@ Textfenstern. Rechts erscheinen vollständig geprüfte **Bulletins** als Klartex
 Fehlende Bulletinblöcke werden aus Wiederholungen ergänzt. Fortschritt und
 CRC-/ZIP-Fehler stehen unter dem Bulletin; bis zum nächsten vollständigen Empfang
 bleibt der bisherige Text erhalten.
+Vollständig geprüfte Bulletins werden im Unterordner `bulletins` gespeichert.
+Ein Klick in den Bulletintext öffnet ein zusätzliches Lesefenster mit dem
+aktuellen vollständigen Text, einer Auswahl archivierter Dateinamen und
+**Schließen**. Gleiche Wiederholungen erzeugen keine doppelten Einträge;
+geänderte Fassungen bleiben als eigene Versionen erhalten.
 Die Digitalanzeige zeigt weiterhin Pilot/AFC, Spektrum, Konstellation und gültige
 Frames. Gleiche Meldungen werden innerhalb von zwei Minuten unterdrückt; die
 Listen enthalten jeweils höchstens 1000 Einträge. Beim Zurückscrollen bleibt die

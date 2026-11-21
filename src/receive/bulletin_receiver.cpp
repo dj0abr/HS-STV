@@ -126,21 +126,50 @@ BulletinUpdate BulletinAssembler::accept(const ReceivedFrame& frame, const QDate
     }
     return update;
 }
-BulletinReceiver::BulletinReceiver(QObject* parent) : QObject(parent), worker_([this] { run(); }) {}
+void BulletinAssembler::retryDelivery(const Bulletin& bulletin) {
+    const auto key = bulletin.filename.toUtf8() + '\0' + bulletin.digest;
+    delivered_.erase(std::remove(delivered_.begin(), delivered_.end(), key), delivered_.end());
+}
+BulletinReceiver::BulletinReceiver(QObject* parent, QString archiveDirectory)
+    : QObject(parent), archive_(std::move(archiveDirectory)), worker_([this] { run(); }) {}
 BulletinReceiver::~BulletinReceiver() {
     { std::lock_guard<std::mutex> lock(mutex_); stopping_ = true; queue_.clear(); ++generation_; }
     ready_.notify_one(); if (worker_.joinable()) worker_.join();
 }
 void BulletinReceiver::resetStream() {
-    { std::lock_guard<std::mutex> lock(mutex_); const auto next = ++generation_; queue_.clear(); queue_.push_back({{}, {}, next}); }
+    {
+        std::lock_guard<std::mutex> lock(mutex_); const auto next = ++generation_;
+        queue_.erase(std::remove_if(queue_.begin(), queue_.end(), [](const Work& w) { return w.kind == WorkKind::Frame || w.kind == WorkKind::Reset; }), queue_.end());
+        queue_.push_front({{}, {}, next, WorkKind::Reset, {}});
+    }
+    ready_.notify_one();
+}
+void BulletinReceiver::listArchive() {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        queue_.erase(std::remove_if(queue_.begin(), queue_.end(), [](const Work& w) { return w.kind == WorkKind::List; }), queue_.end());
+        queue_.push_back({{}, {}, 0, WorkKind::List, {}});
+    }
+    ready_.notify_one();
+}
+void BulletinReceiver::loadArchive(const QString& id) {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        queue_.erase(std::remove_if(queue_.begin(), queue_.end(), [](const Work& w) { return w.kind == WorkKind::Load; }), queue_.end());
+        queue_.push_back({{}, {}, 0, WorkKind::Load, id});
+    }
     ready_.notify_one();
 }
 void BulletinReceiver::submit(const ReceivedFrame& frame) {
     if (frame.type < 2 || frame.type > 5) return;
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (queue_.size() >= 512) { const auto next = ++generation_; queue_.clear(); queue_.push_back({{}, {}, next}); }
-        queue_.push_back({frame, QDateTime::currentDateTimeUtc(), generation_.load()});
+        if (queue_.size() >= 512) {
+            const auto next = ++generation_;
+            queue_.erase(std::remove_if(queue_.begin(), queue_.end(), [](const Work& w) { return w.kind == WorkKind::Frame || w.kind == WorkKind::Reset; }), queue_.end());
+            queue_.push_front({{}, {}, next, WorkKind::Reset, {}});
+        }
+        queue_.push_back({frame, QDateTime::currentDateTimeUtc(), generation_.load(), WorkKind::Frame, {}});
     }
     ready_.notify_one();
 }
@@ -153,9 +182,36 @@ void BulletinReceiver::run() {
             if (stopping_) return;
             work = std::move(queue_.front()); queue_.pop_front();
         }
+        if (work.kind == WorkKind::List || work.kind == WorkKind::Load) {
+            try {
+                if (work.kind == WorkKind::List) {
+                    auto entries = archive_.entries();
+                    QMetaObject::invokeMethod(this, [this, entries = std::move(entries)] { if (archiveListed) archiveListed(entries); }, Qt::QueuedConnection);
+                } else {
+                    auto bulletin = archive_.load(work.id);
+                    QMetaObject::invokeMethod(this, [this, id = work.id, bulletin = std::move(bulletin)] { if (archiveLoaded) archiveLoaded(id, bulletin); }, Qt::QueuedConnection);
+                }
+            } catch (const std::exception& error) {
+                const auto message = QString::fromUtf8(error.what());
+                QMetaObject::invokeMethod(this, [this, id = work.id, message] { if (archiveError) archiveError(id, message); }, Qt::QueuedConnection);
+            }
+            continue;
+        }
         if (work.generation != generation_.load()) continue;
-        if (!work.frame) { assembler_.resetStream(); continue; }
+        if (work.kind == WorkKind::Reset) { assembler_.resetStream(); continue; }
         auto update = assembler_.accept(*work.frame, work.at);
+        if (update.bulletin) {
+            try {
+                bool added = false; archive_.save(*update.bulletin, &added);
+                if (update.progress) update.progress->message = "Bulletin vollständig geprüft und gespeichert";
+                if (added) QMetaObject::invokeMethod(this, [this] { if (archiveChanged) archiveChanged(); }, Qt::QueuedConnection);
+            } catch (const std::exception& error) {
+                assembler_.retryDelivery(*update.bulletin);
+                if (!update.progress) update.progress = BulletinProgress{};
+                update.progress->error = true;
+                update.progress->message = "Speichern fehlgeschlagen: " + QString::fromUtf8(error.what());
+            }
+        }
         if (!update.bulletin && !update.progress) continue;
         QMetaObject::invokeMethod(this, [this, update = std::move(update), generation = work.generation] {
             if (generation != generation_.load()) return;

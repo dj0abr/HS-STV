@@ -33,6 +33,7 @@
 #include <QTimer>
 #include <QStackedWidget>
 #include "beacon_view.hpp"
+#include "bulletin_dialog.hpp"
 #include <QVBoxLayout>
 #include <algorithm>
 #include <cmath>
@@ -224,6 +225,11 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     receiver_.beaconMessageReceived = [this](const BeaconMessage& message) { beaconView_->appendMessage(message); };
     receiver_.bulletinReceived = [this](const Bulletin& bulletin) { beaconView_->showBulletin(bulletin); };
     receiver_.bulletinProgressChanged = [this](const BulletinProgress& progress) { beaconView_->showBulletinProgress(progress); };
+    beaconView_->archiveRequested = [this] { openBulletinArchive(); };
+    receiver_.bulletinArchiveChanged = [this] { if (bulletinDialog_) receiver_.listBulletinArchive(); };
+    receiver_.bulletinArchiveListed = [this](const auto& entries) { if (bulletinDialog_) bulletinDialog_->setEntries(entries); };
+    receiver_.bulletinArchiveLoaded = [this](const auto& id, const auto& bulletin) { if (bulletinDialog_) bulletinDialog_->showArchived(id, bulletin); };
+    receiver_.bulletinArchiveError = [this](const auto& id, const auto& error) { if (bulletinDialog_) bulletinDialog_->showError(id, error); };
     receiver_.statusChanged = [this](const ReceiveStatus& status) {
         monitor_->setStatus(status); syncDisplayRange(); showReceiveStatistics(status);
         QString details = status.state;
@@ -540,6 +546,12 @@ void MainWindow::archiveSstv() {
         receiveInfo_->setToolTip("Automatisch gespeichert: " + archive_.savePng(receivedName_, receivedSstv_));
         sstvDirty_ = false;
     } catch (const std::exception& e) { receiveInfo_->setText(QString::fromUtf8(e.what())); }
+}
+void MainWindow::openBulletinArchive() {
+    if (bulletinDialog_) { bulletinDialog_->show(); bulletinDialog_->raise(); bulletinDialog_->activateWindow(); return; }
+    bulletinDialog_ = new BulletinDialog(beaconView_->currentBulletin(), this);
+    bulletinDialog_->loadRequested = [this](const QString& id) { receiver_.loadBulletinArchive(id); };
+    bulletinDialog_->show(); receiver_.listBulletinArchive();
 }
 void MainWindow::openReceiveFolder() {
     try {

@@ -3,6 +3,7 @@
 #include "bulletin_zip.hpp"
 #include "bulletin_fixture.hpp"
 #include <QFile>
+#include <QTemporaryDir>
 #include <QThread>
 #include <QTest>
 using namespace mm_sstv;
@@ -115,7 +116,7 @@ private slots:
         QVERIFY(link.bulletin); QVERIFY(link.bulletin->text.contains("Info (https://example.org/info)"));
     }
     void workerDeliversOnOwnerThreadAndResetsStaleWork() {
-        BulletinReceiver receiver; unsigned count = 0; Bulletin latest; bool ownerThread = true;
+        QTemporaryDir archive; BulletinReceiver receiver(nullptr, archive.path()); unsigned count = 0; Bulletin latest; bool ownerThread = true;
         receiver.bulletinReceived = [&](const Bulletin& bulletin) { ownerThread &= QThread::currentThread() == thread(); latest = bulletin; ++count; };
         const auto input = frames(zip(content()));
         for (const auto& frame : input) receiver.submit(frame);
@@ -124,6 +125,19 @@ private slots:
         QTRY_COMPARE(count, 1u); QVERIFY(ownerThread); QVERIFY(latest.text.contains("Test-Bulletin"));
         for (const auto& frame : input) receiver.submit(frame);
         QTest::qWait(50); QCOMPARE(count, 1u);
+    }
+    void failedSaveIsRetriedOnValidRepeat() {
+        QTemporaryDir dir; QFile blocked(dir.filePath("blocked")); QVERIFY(blocked.open(QIODevice::WriteOnly)); blocked.write("file"); blocked.close();
+        const auto path = dir.filePath("blocked/bulletins"); BulletinReceiver receiver(nullptr, path);
+        bool error = false, saved = false;
+        receiver.progressChanged = [&](const auto& progress) {
+            error |= progress.error && progress.message.contains("Speichern");
+            saved |= !progress.error && progress.message.contains("gespeichert");
+        };
+        const auto input = frames(zip(content())); for (const auto& frame : input) receiver.submit(frame);
+        QTRY_VERIFY(error); QVERIFY(QFile::remove(blocked.fileName()));
+        for (const auto& frame : input) receiver.submit(frame);
+        QTRY_VERIFY(saved); QCOMPARE(BulletinArchive(path).entries().size(), std::size_t(1));
     }
 };
 QTEST_MAIN(BulletinTest)

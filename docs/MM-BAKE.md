@@ -110,9 +110,9 @@ ctest --test-dir build -R 'mm_beacon_|gui_controls' --output-on-failure
 
 Der DX-Cluster-Empfang wurde im Stationstest bestätigt. CW-Skimmer war dabei
 mangels Aktivität nicht zu beobachten; der vollständige CW-Signalweg besteht
-den automatischen Test. Die Bulletin-Stufe ist jetzt zum Stationstest bereit.
+den automatischen Test. Der Bulletin-Empfang wurde ebenfalls im Stationstest bestätigt.
 
-## Stufe 3: Bulletins (bereit zum Stationstest)
+## Stufe 3: Bulletins (Stationstest erfolgreich)
 
 Datei- und Bulletin-Protokoll sind aus QO100_TRX2 nach C++/Qt übertragen. Der
 Modemkern liefert CRC-geprüfte Frames. `BulletinReceiver` verarbeitet die
@@ -140,9 +140,8 @@ Fehler stehen unter dem Bulletin; dabei bleibt der letzte gültige Text erhalten
 Grenzen: höchstens 1024 Funkblöcke je komprimierter Datei, 4 MiB entpackter
 Inhalt und 65536 Zeichen in der Anzeige. Eine gekürzte Anzeige trägt einen Hinweis.
 Die Worker-Queue ist auf 512 Frames begrenzt und verwirft bei einem Neustart alte
-Ergebnisse. Es gibt weiterhin kein dauerhaftes Archiv und keine Fortsetzung
-unvollständiger Dateien nach einem Programmneustart; das gehört zur separat
-festzulegenden Speicherung in Stufe 4.
+Ergebnisse. Unvollständige Dateien werden nach einem Programmneustart nicht
+fortgesetzt. Vollständige Bulletins werden inzwischen wie unten beschrieben archiviert.
 
 ### Stationstest und Abnahmekriterien
 
@@ -151,7 +150,7 @@ festzulegenden Speicherung in Stufe 4.
    der Dateiname mit **empfangene/erwartete Blöcke**. Fehlt der Anfang, auf den
    nächsten Dateikopf im Bakenzyklus warten.
 3. Nach vollständiger Prüfung muss der Bulletintext lesbar erscheinen und die
-   Statuszeile **Bulletin vollständig geprüft** melden.
+   Statuszeile **Bulletin vollständig geprüft und gespeichert** melden.
 4. Umlaute, Zeilenumbrüche und Links kontrollieren. HTML-Tags oder Script-Inhalte
    sollen nicht als ausgeführte Inhalte erscheinen.
 5. Während des nächsten Bulletin-Empfangs muss der vorige gültige Text erhalten
@@ -171,15 +170,44 @@ Alle neuen Prüfungen sind C++.
 ctest --test-dir build -R 'mm_beacon_|gui_controls' --output-on-failure
 ```
 
-Nach diesem Stationstest folgt der Abschluss einschließlich Python-freier Tests.
+### Archiv und Lesefenster
+
+Jedes vollständig geprüfte Bulletin wird automatisch im Unterordner `bulletins`
+des Projekt-/Arbeitsverzeichnisses gespeichert. Das Archiv enthält den vollständigen
+dekodierten Text mit übertragenem Dateinamen, Titel, Kategorie, Seitennummer,
+Empfangszeit und Prüfsummen in atomar geschriebenen JSON-Dateien. Die ursprüngliche
+HTML-/ZIP-Datei wird nicht separat abgelegt. Die Vorschaugrenze von 65536 Zeichen
+gilt nicht für das Archiv oder das Lesefenster.
+
+Gleicher Dateiname und Inhalt erzeugen keinen zweiten Eintrag. Eine geänderte
+Fassung desselben Dateinamens bleibt als eigene Version erhalten. Das Archiv
+bleibt nach einem Programmneustart verfügbar und ist in Git ausgeschlossen.
+Schreibfehler erscheinen unter der Vorschau; der gültige Text bleibt sichtbar,
+und eine erneute gültige Übertragung versucht das Speichern nochmals.
+Speichern und Laden laufen auf dem Bulletin-Worker, außerhalb des GUI-Threads.
+
+Ein Klick in den Bulletintext öffnet ein zusätzliches, nicht modales Lesefenster.
+Mit fokussiertem Textfeld funktionieren auch Eingabe- oder Leertaste. Beim Öffnen
+erscheint das aktuelle Bulletin; die Combobox bietet archivierte Dateinamen mit
+Empfangsdatum, neueste zuerst. Ohne aktuellen Empfang wird der neueste Archiveintrag
+geladen. Ein eintreffendes Bulletin ergänzt die Auswahl, ohne den gerade gelesenen
+Text zu ersetzen. **Schließen**, Escape oder der Fensterschließknopf schließen das
+Lesefenster. Textmarkierung durch Ziehen öffnet kein zusätzliches Fenster.
+
+Zum Stationstest ein Bulletin empfangen, das Lesefenster öffnen und die Auswahl
+älterer Dateien prüfen. Danach HS-STV neu starten und vor dem nächsten vollständigen
+Empfang das Archiv öffnen: Die gespeicherten Texte müssen weiterhin verfügbar sein.
+`mm_beacon_bulletin_archive` prüft Speichern, Neustart, vollständige lange Texte,
+Duplikate, Versionen, Fehlerbehandlung und Bedienung. `gui_controls` prüft den
+gesamten Weg vom synthetischen Empfangsaudio bis zum Archiv und Lesefenster.
 
 ## Stufe 4: Abschluss und Python-freie Tests
 
 Die vorhandenen sieben Python-Test-/Hilfsdateien in hs-stv durch native
 C++-/QtTest-Prüfungen ersetzen, ohne die geprüften Signal- und Fehlerfälle zu
 verlieren. Danach Python/NumPy aus CMake, prepare.sh und Dokumentation entfernen.
-Die neuen Bakenprüfungen sind bereits C++. Dauerhafte Archive und die Fortsetzung
-unvollständiger Bulletins über Programmneustarts werden als eigener Umfang
-entschieden. Qt-Dateipfade, PortAudio und passende liquid-dsp-/ZIP-Builds bilden
+Die neuen Bakenprüfungen sind bereits C++. Die Fortsetzung unvollständiger
+Bulletins über Programmneustarts bleibt ein eigener Umfang.
+Qt-Dateipfade, PortAudio und passende liquid-dsp-/ZIP-Builds bilden
 die Grundlage des späteren Windows-Ports; aktuell wird kein Windows-Build als
 getestet behauptet.

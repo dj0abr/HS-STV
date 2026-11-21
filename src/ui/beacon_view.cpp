@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "beacon_view.hpp"
 #include <QFontDatabase>
+#include <QApplication>
+#include <QKeyEvent>
+#include <QMouseEvent>
 #include <QGroupBox>
 #include <QLabel>
 #include <QPlainTextEdit>
@@ -46,6 +49,9 @@ BeaconView::BeaconView(QWidget* parent) : QWidget(parent) {
     bulletin_->setMaximumBlockCount(0);
     bulletin_->setLineWrapMode(QPlainTextEdit::WidgetWidth);
     bulletin_->setPlaceholderText("Warte auf ein vollständiges Bulletin…");
+    bulletin_->setAccessibleName("Bulletin · zum Lesen und zur Archivauswahl öffnen");
+    bulletin_->installEventFilter(this); bulletin_->viewport()->installEventFilter(this);
+    bulletin_->viewport()->setCursor(Qt::PointingHandCursor);
     bulletinStatus_ = new QLabel("Warte auf Bulletin-Dateikopf", bulletin_->parentWidget());
     bulletinStatus_->setObjectName("beaconBulletinStatus"); bulletinStatus_->setTextFormat(Qt::PlainText);
     auto statusFont = bulletinStatus_->font(); statusFont.setPointSizeF(9); bulletinStatus_->setFont(statusFont);
@@ -70,6 +76,7 @@ void BeaconView::appendMessage(const BeaconMessage& message) {
     view->horizontalScrollBar()->setValue(horizontal);
 }
 void BeaconView::showBulletin(const Bulletin& bulletin) {
+    currentBulletin_ = bulletin;
     if (bulletin.filename == bulletinFilename_ && bulletin.digest == bulletinDigest_) return;
     bulletinFilename_ = bulletin.filename; bulletinDigest_ = bulletin.digest;
     auto text = bulletin.text;
@@ -79,12 +86,29 @@ void BeaconView::showBulletin(const Bulletin& bulletin) {
     }
     bulletin_->setPlainText(text); bulletin_->moveCursor(QTextCursor::Start);
     bulletin_->verticalScrollBar()->setValue(0);
-    bulletin_->setToolTip(plainToolTip(bulletin.filename + "\n" + bulletin.title + "\nEmpfangen: " + bulletin.receivedAt.toUTC().toString(Qt::ISODate)));
+    bulletin_->setToolTip(plainToolTip(bulletin.filename + "\n" + bulletin.title + "\nEmpfangen: " + bulletin.receivedAt.toUTC().toString(Qt::ISODate) + "\nKlicken: vollständig lesen und gespeicherte Bulletins auswählen"));
 }
 void BeaconView::showBulletinProgress(const BulletinProgress& progress) {
     const auto text = progress.message.isEmpty() ? QString("%1 · %2/%3 Blöcke").arg(progress.filename).arg(progress.received).arg(progress.expected) :
                                                  progress.filename + " · " + progress.message;
     bulletinStatus_->setText(text);
     bulletinStatus_->setToolTip(plainToolTip(text));
+}
+bool BeaconView::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == bulletin_->viewport()) {
+        if (event->type() == QEvent::MouseButtonPress) {
+            const auto* mouse = static_cast<QMouseEvent*>(event);
+            bulletinPressed_ = mouse->button() == Qt::LeftButton; bulletinPress_ = mouse->pos();
+        } else if (event->type() == QEvent::MouseButtonRelease) {
+            const auto* mouse = static_cast<QMouseEvent*>(event);
+            const bool clicked = bulletinPressed_ && mouse->button() == Qt::LeftButton &&
+                (mouse->pos() - bulletinPress_).manhattanLength() < QApplication::startDragDistance();
+            bulletinPressed_ = false; if (clicked && archiveRequested) archiveRequested();
+        }
+    } else if (watched == bulletin_ && event->type() == QEvent::KeyPress) {
+        const int key = static_cast<QKeyEvent*>(event)->key();
+        if (key == Qt::Key_Return || key == Qt::Key_Enter || key == Qt::Key_Space) { if (archiveRequested) archiveRequested(); return true; }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 }

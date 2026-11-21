@@ -10,6 +10,7 @@
 #include <bitset>
 #include <future>
 #include <QElapsedTimer>
+#include <QPointer>
 class QLabel;
 class QPushButton;
 class QComboBox;
@@ -23,6 +24,7 @@ namespace mm_sstv {
 class ImagePanel;
 class ReceiveMonitor;
 class BeaconView;
+class BulletinDialog;
 class MainWindow final : public QMainWindow {
 public:
     MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings, std::unique_ptr<AudioInput> input = nullptr);
@@ -45,6 +47,7 @@ private:
     void restartReceiver();
     void receivedImage(const ReceivedImage& image);
     void openReceiveFolder();
+    void openBulletinArchive();
     void archiveSstv();
     void receivedSstv(const SstvUpdate& update);
     void showReceiveStatistics(const ReceiveStatus& status);
@@ -109,6 +112,7 @@ private:
     QLabel* imageInfo_ = nullptr;
     QProgressBar* progress_ = nullptr;
     QStackedWidget* contentPages_ = nullptr;
+    QPointer<BulletinDialog> bulletinDialog_;
     BeaconView* beaconView_ = nullptr;
     QAction* open_ = nullptr;
 };

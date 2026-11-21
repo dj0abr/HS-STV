@@ -2,6 +2,7 @@
 // Protocol adapted from QO100_TRX2/external/mmdecoder/data_collector.py.
 #pragma once
 #include "mm_sstv/image_assembler.hpp"
+#include "bulletin_archive.hpp"
 #include <QByteArray>
 #include <QDateTime>
 #include <QObject>
@@ -35,6 +36,7 @@ class BulletinAssembler {
 public:
     BulletinUpdate accept(const ReceivedFrame& frame, const QDateTime& at = QDateTime::currentDateTimeUtc());
     void resetStream() { active_.clear(); delivered_.clear(); lastPublished_ = {}; }
+    void retryDelivery(const Bulletin& bulletin);
 private:
     struct Transfer {
         QString filename;
@@ -52,16 +54,24 @@ private:
 // delivered on this object's owning Qt thread; resets invalidate stale results.
 class BulletinReceiver final : public QObject {
 public:
-    explicit BulletinReceiver(QObject* parent = nullptr);
+    explicit BulletinReceiver(QObject* parent = nullptr, QString archiveDirectory = {});
     ~BulletinReceiver() override;
     void submit(const ReceivedFrame& frame);
     void resetStream();
+    void listArchive();
+    void loadArchive(const QString& id);
     std::function<void(const Bulletin&)> bulletinReceived;
     std::function<void(const BulletinProgress&)> progressChanged;
+    std::function<void()> archiveChanged;
+    std::function<void(const std::vector<BulletinArchiveEntry>&)> archiveListed;
+    std::function<void(const QString&, const Bulletin&)> archiveLoaded;
+    std::function<void(const QString&, const QString&)> archiveError;
 private:
-    struct Work { std::optional<ReceivedFrame> frame; QDateTime at; std::uint64_t generation; };
+    enum class WorkKind { Frame, Reset, List, Load };
+    struct Work { std::optional<ReceivedFrame> frame; QDateTime at; std::uint64_t generation; WorkKind kind = WorkKind::Frame; QString id; };
     void run();
     BulletinAssembler assembler_;
+    BulletinArchive archive_;
     std::mutex mutex_;
     std::condition_variable ready_;
     std::deque<Work> queue_;

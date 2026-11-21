@@ -9,6 +9,10 @@
 #include <stdexcept>
 namespace mm_sstv {
 Receiver::Receiver(std::unique_ptr<AudioInput> input, QObject* parent) : QObject(parent), input_(std::move(input)) {
+    bulletins_.archiveChanged = [this] { if (bulletinArchiveChanged) bulletinArchiveChanged(); };
+    bulletins_.archiveListed = [this](const auto& entries) { if (bulletinArchiveListed) bulletinArchiveListed(entries); };
+    bulletins_.archiveLoaded = [this](const auto& id, const auto& bulletin) { if (bulletinArchiveLoaded) bulletinArchiveLoaded(id, bulletin); };
+    bulletins_.archiveError = [this](const auto& id, const auto& error) { if (bulletinArchiveError) bulletinArchiveError(id, error); };
     bulletins_.bulletinReceived = [this](const Bulletin& bulletin) { if (active_ && isBeacon(mode_) && bulletinReceived) bulletinReceived(bulletin); };
     bulletins_.progressChanged = [this](const BulletinProgress& progress) { if (active_ && isBeacon(mode_) && bulletinProgressChanged) bulletinProgressChanged(progress); };
     connect(&core_, &QProcess::readyReadStandardOutput, this, [this] { readOutput(); });

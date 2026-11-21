@@ -46,11 +46,17 @@ public:
     std::vector<AudioDevice> devices();
     void start(const std::string& device, Modulation mode = Modulation::Apsk8);
     void stop();
+    void listBulletinArchive() { bulletins_.listArchive(); }
+    void loadBulletinArchive(const QString& id) { bulletins_.loadArchive(id); }
     std::function<void(const ReceivedImage&)> imageReceived;
     std::function<void(const SstvUpdate&)> sstvReceived;
     std::function<void(const BeaconMessage&)> beaconMessageReceived;
     std::function<void(const Bulletin&)> bulletinReceived;
     std::function<void(const BulletinProgress&)> bulletinProgressChanged;
+    std::function<void()> bulletinArchiveChanged;
+    std::function<void(const std::vector<BulletinArchiveEntry>&)> bulletinArchiveListed;
+    std::function<void(const QString&, const Bulletin&)> bulletinArchiveLoaded;
+    std::function<void(const QString&, const QString&)> bulletinArchiveError;
     std::function<void(const ReceiveStatus&)> statusChanged;
     std::function<void(const QString&)> failed;
 private:

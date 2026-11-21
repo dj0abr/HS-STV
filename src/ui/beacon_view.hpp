@@ -13,6 +13,10 @@ public:
     void appendMessage(const BeaconMessage& message);
     void showBulletin(const Bulletin& bulletin);
     void showBulletinProgress(const BulletinProgress& progress);
+    const std::optional<Bulletin>& currentBulletin() const { return currentBulletin_; }
+    std::function<void()> archiveRequested;
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
 private:
     QPlainTextEdit* cw_ = nullptr;
     QPlainTextEdit* dx_ = nullptr;
@@ -20,5 +24,8 @@ private:
     QLabel* bulletinStatus_ = nullptr;
     QByteArray bulletinDigest_;
     QString bulletinFilename_;
+    std::optional<Bulletin> currentBulletin_;
+    QPoint bulletinPress_;
+    bool bulletinPressed_ = false;
 };
 }
