@@ -28,18 +28,24 @@
 #include <QUrl>
 #include <array>
 #include <stdexcept>
+#include <atomic>
+#include <chrono>
+#include <thread>
 using namespace mm_sstv;
 struct State {
     std::vector<AudioDevice> devices{{"other", "Other output"}, {"toQO100", "toQO100"}};
     std::string chosen, error;
     bool open = false, failStart = false, complete = false;
+    unsigned queryDelayMs = 0;
     unsigned starts = 0, sampleRate = 48000;
     AudioOutput::Render render;
 };
 class FakeOutput final : public AudioOutput {
 public:
     explicit FakeOutput(State& state) : state_(state) {}
-    std::vector<AudioDevice> devices() override { return state_.devices; }
+    std::vector<AudioDevice> devices() override {
+        std::this_thread::sleep_for(std::chrono::milliseconds(state_.queryDelayMs)); return state_.devices;
+    }
     void start(const std::string& device, Render render, unsigned sampleRate) override {
         if (state_.failStart) throw std::runtime_error("Device unplugged");
         state_.sampleRate = sampleRate; state_.chosen = device; state_.open = true; state_.complete = false; state_.error.clear(); ++state_.starts;
@@ -66,6 +72,26 @@ public:
 private:
     CaptureState& state_;
 };
+struct ContinuousInput final : public AudioInput {
+    std::atomic<bool> active{false}; std::thread worker;
+    std::atomic<unsigned> starts{0}, callbacks{0}; unsigned queryDelayMs = 0;
+    ~ContinuousInput() override { stop(); }
+    std::vector<AudioDevice> devices() override {
+        std::this_thread::sleep_for(std::chrono::milliseconds(queryDelayMs)); return {{"fromQO100", "Synthetic input"}};
+    }
+    void start(const std::string&, Consume consume, unsigned rate) override {
+        stop(); active = true; ++starts;
+        worker = std::thread([this, consume=std::move(consume), rate] {
+            std::vector<float> silence(rate/100); auto next = std::chrono::steady_clock::now();
+            while (active) {
+                consume(silence.data(), silence.size()); ++callbacks;
+                next += std::chrono::milliseconds(10); std::this_thread::sleep_until(next);
+            }
+        });
+    }
+    void stop() noexcept override { active = false; if (worker.joinable()) worker.join(); }
+    std::string error() const override { return {}; }
+};
 QString picture(QTemporaryDir& dir) {
     QImage image(400, 200, QImage::Format_RGB32); image.fill(QColor(20, 40, 230));
     const auto path = dir.filePath("Rundfunkmuseum_Besichtigung_Cham_Radio_Sender.png"); if (!image.save(path)) throw std::runtime_error("Cannot write test image");
@@ -86,6 +112,70 @@ private slots:
     void cleanup() {
         QDesktopServices::unsetUrlHandler("file");
         QVERIFY(QDir::setCurrent(originalDirectory_)); receiveRoot_.reset();
+    }
+    void saveRetrySurvivesDuplicateReception() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state; CaptureState capture;
+        MainWindow window(std::make_unique<FakeOutput>(state), settings, std::make_unique<FakeCapture>(capture));
+        QTRY_VERIFY(capture.open); QVERIFY(QDir().rmdir("rxpic"));
+        QFile blocked("rxpic"); QVERIFY(blocked.open(QIODevice::WriteOnly)); blocked.write("blocked"); blocked.close();
+        QImage picture(320,240,QImage::Format_RGB32); picture.fill(Qt::blue);
+        const auto encoded = preparePicture(picture,picture.size()); const auto transmission = prepareImage(encoded.jpeg,"retry.jpg");
+        const auto send = [&](const ImageTransmission& value) {
+            ImageAudio signal(value); std::array<float,4800> buffer{};
+            while (const auto n = signal.render(buffer.data(),buffer.size(),1)) { capture.consume(buffer.data(),n); QTest::qWait(5); }
+        };
+        send(transmission); auto* info = window.findChild<QLabel*>("receiveInfo");
+        QTRY_VERIFY(info->text().contains("konnte nicht"));
+        picture.fill(Qt::green); const auto other = preparePicture(picture,picture.size());
+        send(prepareImage(other.jpeg,"second.jpg"));
+        QTRY_VERIFY(info->text().contains("konnte nicht"));
+        QVERIFY(QFile::remove("rxpic")); QVERIFY(QDir().mkdir("rxpic"));
+        // No new RF or receiver callback is required for the pending write.
+        QTRY_COMPARE_WITH_TIMEOUT(QDir("rxpic").entryList({"*.jpg"},QDir::Files).size(),2,4000);
+        QTRY_COMPARE(info->text(),QString("Empfang abgeschlossen"));
+        QList<QByteArray> files;
+        for (const auto& name : QDir("rxpic").entryList({"*.jpg"},QDir::Files)) {
+            QFile file(QDir("rxpic").filePath(name)); QVERIFY(file.open(QIODevice::ReadOnly)); files.push_back(file.readAll());
+        }
+        QVERIFY(files.contains(QByteArray(reinterpret_cast<const char*>(encoded.jpeg.data()),int(encoded.jpeg.size()))));
+        QVERIFY(files.contains(QByteArray(reinterpret_cast<const char*>(other.jpeg.data()),int(other.jpeg.size()))));
+        send(transmission); QTest::qWait(200);
+        QCOMPARE(QDir("rxpic").entryList({"*.jpg"},QDir::Files).size(),2);
+    }
+    void deviceQueriesDoNotInterruptCapture_data() {
+        QTest::addColumn<bool>("slowInput");
+        QTest::newRow("output") << false; QTest::newRow("input") << true;
+    }
+    void deviceQueriesDoNotInterruptCapture() {
+        QFETCH(bool, slowInput);
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
+        auto input = std::make_unique<ContinuousInput>(); auto* capture = input.get();
+        MainWindow window(std::make_unique<FakeOutput>(state),settings,std::move(input));
+        QTRY_VERIFY(capture->active.load()); QTest::qWait(200);
+        if (slowInput) capture->queryDelayMs = 2600; else state.queryDelayMs = 2600;
+        const auto startCount = capture->starts.load(); const auto callbacks = capture->callbacks.load();
+        QTimer::singleShot(100,&window,[&] {
+            auto* dialog = window.findChild<QDialog*>(); QVERIFY(dialog);
+            QVERIFY(capture->active.load()); QVERIFY(!dialog->findChild<QPushButton*>("refreshDevices")->isEnabled());
+        });
+        QTimer::singleShot(3100,&window,[&] {
+            auto* dialog = window.findChild<QDialog*>(); QVERIFY(dialog); dialog->reject();
+            QVERIFY(capture->active.load()); QCOMPARE(capture->starts.load(),startCount);
+            QVERIFY(capture->callbacks.load() > callbacks + 240);
+            QVERIFY(!window.findChild<QLabel*>("receiveStatus")->text().contains("übergelaufen"));
+            QVERIFY(dialog->findChild<QPushButton*>("refreshDevices")->isEnabled());
+        });
+        window.findChild<QAction*>("audioSetup")->trigger();
+        QVERIFY(capture->active.load()); QCOMPARE(capture->starts.load(),startCount);
+    }
+    void closeSetupDuringDeviceQuery() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
+        auto input = std::make_unique<ContinuousInput>(); auto* capture = input.get();
+        MainWindow window(std::make_unique<FakeOutput>(state),settings,std::move(input));
+        QTRY_VERIFY(capture->active.load()); state.queryDelayMs = 500;
+        QTimer::singleShot(50,&window,[&] { auto* dialog=window.findChild<QDialog*>(); QVERIFY(dialog); dialog->reject(); });
+        window.findChild<QAction*>("audioSetup")->trigger();
+        QTest::qWait(700); QVERIFY(capture->active.load()); QCOMPARE(capture->starts.load(),1u);
     }
     void archiveNamesBytesAndWriteErrors() {
         ReceivedArchive archive; archive.ensureDirectory(); QVERIFY(QDir("rxpic").exists());
@@ -347,8 +437,12 @@ private slots:
         QTimer::singleShot(30, &window, [&] {
             auto* dialog = window.findChild<QDialog*>(); QVERIFY(dialog);
             auto* outputs = dialog->findChild<QComboBox*>("outputDevice");
+            QTRY_VERIFY(dialog->findChild<QPushButton*>("refreshDevices")->isEnabled());
             QCOMPARE(outputs->currentData().toString(), QString("toQO100"));
+            state.devices.push_back({"new-output", "New output"});
             dialog->findChild<QPushButton*>("refreshDevices")->click();
+            QTRY_VERIFY(dialog->findChild<QPushButton*>("refreshDevices")->isEnabled());
+            QVERIFY(outputs->findData("new-output") >= 0);
             QCOMPARE(outputs->currentData().toString(), QString("toQO100"));
             QVERIFY(!dialog->findChild<QSlider*>("outputLevel"));
             window.findChild<QSlider*>("outputLevel")->setValue(60);
@@ -438,6 +532,7 @@ private slots:
             QTimer::singleShot(30, &window, [&] {
                 auto* dialog = window.findChild<QDialog*>(); QVERIFY(dialog);
                 auto* inputs = dialog->findChild<QComboBox*>("inputDevice");
+                QTRY_VERIFY(inputs->isEnabled() && inputs->findData("other-input") >= 0);
                 inputs->setCurrentIndex(inputs->findData("other-input")); dialog->reject();
             });
             window.findChild<QAction*>("audioSetup")->trigger();

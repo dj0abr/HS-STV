@@ -8,6 +8,8 @@
 #include <QSettings>
 #include <optional>
 #include <bitset>
+#include <future>
+#include <QElapsedTimer>
 class QLabel;
 class QPushButton;
 class QComboBox;
@@ -24,7 +26,10 @@ public:
     ~MainWindow() override;
     bool loadImage(const QString& filename);
 private:
-    void refreshDevices();
+    void refreshDevices(); // Initial enumeration, before the receiver starts.
+    void requestDeviceScan();
+    void finishDeviceScan();
+    void retryJpegSaves();
     void setup();
     void toggle();
     void poll();
@@ -53,7 +58,18 @@ private:
     QImage receivedSstv_;
     std::bitset<256> receivedRows_;
     bool receivedPartial_ = false;
-    std::size_t previewBytes_ = 0;
+    std::vector<std::uint8_t> previewJpeg_;
+    struct PendingJpeg { QString name; std::vector<std::uint8_t> bytes; };
+    std::vector<PendingJpeg> pendingJpegs_;
+    QElapsedTimer jpegRetryAge_;
+    struct DeviceScan {
+        std::vector<AudioDevice> inputs, outputs;
+        std::string inputError, outputError;
+        bool updateOutputs = false;
+    };
+    std::future<DeviceScan> deviceScan_;
+    std::vector<AudioDevice> inputDevices_;
+    QString inputDeviceError_;
     ReceiveMonitor* monitor_ = nullptr;
     ImagePanel* receivePreview_ = nullptr;
     QLabel* receiveStatus_ = nullptr;

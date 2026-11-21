@@ -223,21 +223,27 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
         monitor_->clear("Empfang unterbrochen", mode_); receiveStatus_->setToolTip({});
         receiveStatus_->setText(text); receiveRetry_->start();
     };
-    refreshDevices();
+    refreshDevices(); jpegRetryAge_.start();
     try { archive_.ensureDirectory(); }
     catch (const std::exception& e) { receiveInfo_->setText(QString::fromUtf8(e.what())); }
     if (receiver_.available()) QTimer::singleShot(0, this, [this] { restartReceiver(); });
 }
-MainWindow::~MainWindow() { receiveRetry_->stop(); transmitter_.stop(); receiver_.stop(); archiveSstv(); }
+MainWindow::~MainWindow() {
+    receiveRetry_->stop();
+    // A closed setup dialog does not cancel an in-flight backend call. Keep
+    // both adapters alive until it returns; no callback accesses a dead dialog.
+    if (deviceScan_.valid()) deviceScan_.wait();
+    transmitter_.stop(); receiver_.stop(); archiveSstv();
+}
 bool MainWindow::deviceAvailable() const {
     return std::any_of(devices_.begin(), devices_.end(), [this](const auto& d) { return d.id == device_; });
 }
 void MainWindow::updateButton() {
     const bool running = transmitter_.running();
     start_->setText(running ? "STOP" : "Senden");
-    start_->setEnabled(running || (deviceAvailable() && (image_.has_value() || bool(sstvImage_))));
+    start_->setEnabled(running || (!deviceScan_.valid() && deviceAvailable() && (image_.has_value() || bool(sstvImage_))));
     overlayEdit_->setEnabled(!running); overlayAction_->setEnabled(!running); overlaySlots_->setEnabled(!running);
-    waterfallId_->setEnabled(!running); modes_->setEnabled(!running); sizes_->setEnabled(!running && !isSstv(mode_)); preview_->setEditable(!running); open_->setEnabled(!running);
+    waterfallId_->setEnabled(!running); modes_->setEnabled(!running && !deviceScan_.valid()); sizes_->setEnabled(!running && !isSstv(mode_)); preview_->setEditable(!running); open_->setEnabled(!running);
 }
 void MainWindow::showReady() {
     if (deviceAvailable()) status_->setText("Bereit · " + QString::fromStdString(device_) + " · " + QString::number(level_) + " %");
@@ -247,6 +253,52 @@ void MainWindow::showReady() {
 void MainWindow::refreshDevices() {
     try { devices_ = transmitter_.audio().devices(); showReady(); }
     catch (const std::exception& e) { devices_.clear(); status_->setText(QString::fromUtf8(e.what())); updateButton(); }
+}
+void MainWindow::requestDeviceScan() {
+    if (deviceScan_.valid()) return;
+    auto* output = &transmitter_.audio(); auto* input = &receiver_;
+    const bool includeOutputs = !transmitter_.running();
+    try {
+        deviceScan_ = std::async(std::launch::async, [output, input, includeOutputs] {
+            DeviceScan result; result.updateOutputs = includeOutputs;
+            if (includeOutputs) {
+                try { result.outputs = output->devices(); }
+                catch (const std::exception& e) { result.outputError = e.what(); }
+            }
+            try { result.inputs = input->devices(); }
+            catch (const std::exception& e) { result.inputError = e.what(); }
+            return result;
+        });
+    } catch (const std::exception& e) { status_->setText(QString::fromUtf8(e.what())); }
+    updateButton();
+}
+void MainWindow::finishDeviceScan() {
+    if (!deviceScan_.valid() || deviceScan_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
+    const auto result = deviceScan_.get();
+    if (result.updateOutputs) devices_ = result.outputs;
+    inputDevices_ = result.inputs; inputDeviceError_ = QString::fromStdString(result.inputError);
+    if (result.updateOutputs && !transmitter_.running()) {
+        showReady();
+        if (!result.outputError.empty()) status_->setText(QString::fromStdString(result.outputError));
+    }
+    updateButton();
+}
+void MainWindow::retryJpegSaves() {
+    if (pendingJpegs_.empty() || jpegRetryAge_.elapsed() < 2000) return;
+    jpegRetryAge_.restart();
+    for (auto it = pendingJpegs_.begin(); it != pendingJpegs_.end();) {
+        try {
+            const auto path = archive_.saveJpeg(it->name, it->bytes);
+            if (receivedName_ == it->name && receivedJpeg_ == it->bytes) {
+                receiveInfo_->setText("Empfang abgeschlossen");
+                receiveInfo_->setToolTip("Automatisch gespeichert: " + path);
+            }
+            it = pendingJpegs_.erase(it);
+        } catch (const std::exception& e) {
+            if (receivedName_ == it->name && receivedJpeg_ == it->bytes) receiveInfo_->setText(QString::fromUtf8(e.what()));
+            ++it;
+        }
+    }
 }
 void MainWindow::toggle() {
     if (transmitter_.running()) { transmitter_.stop(); showReady(); return; }
@@ -265,6 +317,7 @@ void MainWindow::toggle() {
     }
 }
 void MainWindow::poll() {
+    finishDeviceScan(); retryJpegSaves();
     if (!transmitter_.running()) return;
     const auto error = transmitter_.audio().error();
     if (!error.empty()) {
@@ -342,19 +395,29 @@ void MainWindow::restartReceiver() {
 }
 void MainWindow::receivedImage(const ReceivedImage& image) {
     if (image.newImage) {
-        archiveSstv(); receivedSstv_ = {}; receivedRows_.reset(); receivedJpeg_.clear(); previewBytes_ = 0; receivePreview_->setImage({});
+        archiveSstv(); receivedSstv_ = {}; receivedRows_.reset(); receivedJpeg_.clear(); previewJpeg_.clear(); receivePreview_->setImage({});
     }
     receivedName_ = QString::fromStdString(image.filename);
     receiveProgress_->setValue(static_cast<int>(image.blocks * 100 / image.totalBlocks));
-    receiveInfo_->setText(QString("%1 · %2/%3 Blöcke").arg(receivedName_).arg(image.blocks).arg(image.totalBlocks));
-    if (image.jpeg.size() <= previewBytes_ && !image.complete) return;
+    receiveInfo_->setText(QString("%1 · %2/%3 Blöcke%4").arg(receivedName_).arg(image.blocks).arg(image.totalBlocks)
+        .arg(!image.complete && image.blocks == image.totalBlocks ? " · Abschlussprüfung" : ""));
+    if (image.jpeg == previewJpeg_ && !image.complete) return;
     const auto picture = decodeReceivedJpeg(image.jpeg, image.complete);
     if (!picture.isNull()) {
-        receivePreview_->setImage(picture); previewBytes_ = image.jpeg.size();
+        receivePreview_->setImage(picture); previewJpeg_ = image.jpeg;
         if (image.complete) {
             receivedJpeg_ = image.jpeg; receiveInfo_->setText("Empfang abgeschlossen");
             try { receiveInfo_->setToolTip("Automatisch gespeichert: " + archive_.saveJpeg(receivedName_, receivedJpeg_)); }
-            catch (const std::exception& e) { receiveInfo_->setText(QString::fromUtf8(e.what())); }
+            catch (const std::exception& e) {
+                // Keep the completed bytes independently of assembler duplicate
+                // suppression and subsequent pictures. Retry without needing RF.
+                const auto found = std::find_if(pendingJpegs_.begin(), pendingJpegs_.end(), [this](const auto& p) {
+                    return p.name == receivedName_ && p.bytes == receivedJpeg_;
+                });
+                if (found == pendingJpegs_.end()) pendingJpegs_.push_back({receivedName_, receivedJpeg_});
+                receiveInfo_->setToolTip("Bild bleibt im Speicher; automatischer Speicherversuch alle 2 Sekunden.");
+                receiveInfo_->setText(QString::fromUtf8(e.what()));
+            }
         }
     } else if (image.complete) receiveInfo_->setText(receivedName_ + " · Blöcke vollständig, JPEG nicht darstellbar");
 }
@@ -425,7 +488,7 @@ void MainWindow::openReceiveFolder() {
     } catch (const std::exception& e) { receiveInfo_->setText(QString::fromUtf8(e.what())); }
 }
 void MainWindow::setup() {
-    if (!transmitter_.running()) refreshDevices();
+    finishDeviceScan();
     QDialog dialog(this); dialog.setWindowTitle("Audio-Setup"); dialog.setMinimumWidth(500);
     auto* layout = new QVBoxLayout(&dialog); auto* form = new QFormLayout;
     auto* inputs = new QComboBox(&dialog); inputs->setObjectName("inputDevice");
@@ -433,7 +496,7 @@ void MainWindow::setup() {
     auto populateInputs = [&] {
         const QSignalBlocker blocker(inputs); inputs->clear();
         try {
-            for (const auto& device : receiver_.devices()) {
+            for (const auto& device : inputDevices_) {
                 auto name = QString::fromStdString(device.name);
                 if (device.name != device.id) name += " [" + QString::fromStdString(device.id) + "]";
                 inputs->addItem(name, QString::fromStdString(device.id));
@@ -470,7 +533,27 @@ void MainWindow::setup() {
     info->setWordWrap(true); layout->addWidget(info);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog); layout->addWidget(buttons);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    connect(refresh, &QPushButton::clicked, &dialog, [&] { refreshDevices(); populate(); populateInputs(); });
+    auto updateScanControls = [&] {
+        const bool busy = deviceScan_.valid();
+        refresh->setEnabled(!busy && !transmitter_.running());
+        refresh->setText(busy ? "Suche…" : "Aktualisieren");
+        outputs->setEnabled(!busy && !transmitter_.running());
+        inputs->setEnabled(!busy && receiver_.available());
+    };
+    QTimer scanTimer; scanTimer.setInterval(10);
+    bool scanWasPending = deviceScan_.valid();
+    connect(refresh, &QPushButton::clicked, &dialog, [&] {
+        requestDeviceScan(); scanWasPending = deviceScan_.valid(); updateScanControls();
+    });
+    connect(&scanTimer, &QTimer::timeout, &dialog, [&] {
+        finishDeviceScan();
+        if (scanWasPending && !deviceScan_.valid()) {
+            populate(); populateInputs();
+            if (!inputDeviceError_.isEmpty()) receiveStatus_->setToolTip(inputDeviceError_);
+        }
+        scanWasPending = deviceScan_.valid(); updateScanControls();
+    });
+    requestDeviceScan(); scanWasPending = true; updateScanControls(); scanTimer.start();
     connect(outputs, QOverload<int>::of(&QComboBox::currentIndexChanged), &dialog, [&](int index) {
         if (index < 0 || transmitter_.running()) return;
         device_ = outputs->itemData(index).toString().toStdString();

@@ -82,8 +82,28 @@ ordnet die 219-Byte-Blöcke über die Zähler zu, entfernt den 55-Byte-Dateikopf
 beachtet die tatsächliche JPEG-Länge. Die maximale Empfangslänge ist durch
 1024 Blöcke begrenzt (224201 JPEG-Bytes). Der Sender bleibt bei 200000 Byte.
 
-Doppelte erste Frames löschen vorhandene Blöcke nicht. Fehlende Teile können durch
-eine weitere Aussendung ergänzt werden. Bis zu acht Bildidentitäten werden anhand
+Die Headerwiederholungen am Anfang einer Aussendung löschen vorhandene Blöcke
+nicht. Fehlende Teile unvollständiger Bilder können durch weitere Aussendungen
+ergänzt werden; gültige ältere Blöcke zählen dabei vollständig mit. Ein aus
+mehreren Aussendungen zusammengesetztes Bild bleibt bis zum Ende der aktuellen
+Aussendung vorläufig, damit spätere widersprechende Blöcke noch erkannt werden.
+Ist der Blockvorrat bereits vollständig, erscheint bis dahin **Abschlussprüfung**.
+
+Nach einem bereits abgeschlossenen Bild beginnt eine neue Aussendung mit einem
+frischen Blockvorrat, auch bei gleichem Dateinamen, gleicher Größe und gleicher ID.
+Widerspricht ein neuer Block einem zwischengespeicherten Block, werden die alten,
+in der aktuellen Aussendung noch nicht bestätigten Blöcke verworfen. Bereits in
+der aktuellen Aussendung empfangene Blöcke bleiben gültig. Wiederholungsbeginn,
+Eingangsneustart und Dateikopfänderungen werden getrennt von der Bildidentität
+behandelt; die Vorschau wird auch bei gleicher Byteanzahl aktualisiert.
+
+Die Übertragung enthält keine eindeutige Sitzungskennung: Zwei verschiedene
+unvollständige Bilder mit identischen Metadaten und ohne jemals empfangenen
+Blockkonflikt lassen sich nicht sicher auseinanderhalten. Eine 16-Bit-CRC kann
+kollidieren; ältere Sender können beliebige Datei-IDs verwenden. Diese Protokollgrenze
+bleibt bei der gewünschten Reparatur über mehrere Aussendungen bestehen.
+
+Bis zu acht Bildidentitäten werden anhand
 von Dateiname, ID und Größe im Arbeitsspeicher gehalten. Dieser Zwischenspeicher
 bleibt beim Anhalten oder Wechseln des Audioeingangs erhalten, jedoch nicht nach
 einem Programmneustart. Nach einem Stream-Neustart ist ein gültiger Dateikopf nötig;
@@ -104,6 +124,22 @@ dekodiertes vollständiges Bild wird automatisch als originale JPEG-Datei mit
 QSaveFile atomar in **rxpic** unter dem Arbeitsverzeichnis abgelegt. Eindeutige
 Dateinamen verhindern Überschreiben. „Bild → Empfangsordner öffnen“ öffnet den Ordner
 im Standard-Dateimanager. Der Startskript setzt das Arbeitsverzeichnis auf den Projektordner.
+
+Fehlgeschlagene JPEG-Speicherungen bleiben mit Namen und Originalbytes in einer
+eigenen RAM-Warteschlange. Alle zwei Sekunden wird erneut versucht zu speichern,
+auch ohne neue Empfangsdaten und unabhängig von der Duplikaterkennung. Ein
+zwischenzeitlich neu empfangenes Bild entfernt ältere Speicheraufträge nicht.
+Erfolgreich gespeicherte Bilder werden weiterhin anhand ihrer Bytes dedupliziert.
+Die Warteschlange bleibt nur während der laufenden Anwendung erhalten.
+
+Geräteabfragen beim Öffnen oder Aktualisieren des Audio-Setups laufen in einem
+C++-Hintergrundauftrag. Das GUI kann währenddessen den RX-Puffer weiterleiten;
+der Empfänger wird weder angehalten noch neu gestartet. Solange die Abfrage läuft,
+sind die Geräteauswahl und der Beginn einer neuen Sendung gesperrt; STOP bleibt
+verfügbar. Ein frühzeitig geschlossener Setupdialog hinterlässt keine ungültigen
+Callbacks. Beim Beenden der Anwendung wird eine laufende Abfrage vor dem Freigeben
+der Audioadapter abgewartet. Die initiale Ausgangsabfrage findet vor dem Start des
+Empfangs statt. Es werden keine zusätzlichen Plattform-APIs benötigt.
 
 ## Bedienung
 
@@ -127,13 +163,12 @@ im Standard-Dateimanager. Der Startskript setzt das Arbeitsverzeichnis auf den P
   eines neuen Eingangs unterbricht nicht die Sendung.
 - Beim virtuellen Audioweg `fromQO100` liefert QO100_TRX2 den RX2-Kanal. Dessen
   Frequenz muss im Transceiverprogramm auf die gewünschte Aussendung eingestellt sein.
-- Vollständige Bilder werden auf ausdrücklichen Dateidialog-Aufruf gespeichert,
-  nicht automatisch in einen Ordner geschrieben.
+- Vollständig dekodierte Bilder werden automatisch in **rxpic** gespeichert;
+  Speicherfehler werden angezeigt und während der laufenden Anwendung erneut versucht.
 
 ## Prüfung
 
-Die vierzehn eigenständigen CTest-Gruppen enthalten zusätzlich zu den bisherigen
-Sendetests:
+Die eigenständigen CTest-Gruppen enthalten zusätzlich zu den bisherigen Sendetests:
 
 - Zusätzliche QPSK-Regressionen, unabhängiger Original-Wellenformvergleich,
   Bildrundlauf, Qt-Prozessbrücke und native 44,1-kHz-Audioadapter: siehe [QPSK4410.md](QPSK4410.md).
@@ -152,6 +187,13 @@ Sendetests:
 - Monitor: kalibrierte FFT bei Vollaussteuerung und −20 dB, DC, wechselnde
   Blockgrößen, Ringpuffer und Stille/nichtendliche Samples; echte Spektren und
   Konstellationspunkte durch die Qt-Prozessbrücke, Auslaufen alter Daten bei Stille.
+- Stabilitätsregressionen: wiederverwendete IDs und eine tatsächliche CRC16-Kollision,
+  Konflikte in Teilbildcaches, erfolgreiche Reparatur über mehrere fehlerhafte
+  Aussendungen auch mit beliebigen alten IDs; automatische Speicherwiederholung
+  nach Reparatur des Empfangsordners, zwei gleichzeitig ausstehende Bilder und
+  Duplikatunterdrückung nach erfolgreichem Speichern. Verzögerte Eingangs- und
+  Ausgangsabfragen von je 2,6 s dürfen weder Aufnahme noch Decoder neu starten.
+  Auch das Schließen des Setupdialogs während einer Abfrage wird geprüft.
 - Blockrekonstruktion: fehlende Blöcke, Wiederholung erster Frames, Ergänzung bei
   erneuter Aussendung, Wechsel zwischen Bildern, alte Einzelframe-Zähler und
   beliebige Datei-IDs, ungültige Größen und kopflose Daten.

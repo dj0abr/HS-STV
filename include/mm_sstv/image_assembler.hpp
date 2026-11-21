@@ -10,7 +10,7 @@ struct ReceivedImage {
     std::string filename;
     unsigned id = 0;
     std::size_t size = 0, blocks = 0, totalBlocks = 0;
-    std::vector<std::uint8_t> jpeg; // Contiguous bytes only, no padded holes.
+    std::vector<std::uint8_t> jpeg; // Contiguous preview; may include cached, unconfirmed blocks.
     bool complete = false, newImage = false, matchesId = false;
 };
 class ImageAssembler {
@@ -23,9 +23,9 @@ private:
         unsigned id = 0, base = 0;
         std::size_t size = 0;
         std::vector<Payload> blocks;
-        std::vector<bool> valid;
+        std::vector<bool> valid, fresh; // Cached preview vs. confirmed in this transmission.
         std::uint64_t used = 0;
-        bool receiving = false;
+        bool receiving = false, dataSeen = false, completed = false;
     };
     std::map<std::string, Partial> partials_;
     std::string active_;
