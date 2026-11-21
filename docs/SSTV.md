@@ -51,10 +51,21 @@ doppelt so fein wie zuvor.
 Dadurch werden auch die kurzen Zeilensync-Impulse sichtbar. Beim Zusammenfassen
 mehrerer Zeitpunkte für eine Bildschirmzeile bleiben die stärksten Werte erhalten.
 Zwei senkrechte Regler links neben der Anzeige bestimmen die gemeinsame
-dBFS-Skala für Spektrum und Wasserfall. **Min** reicht von **−100 bis −60 dBFS**,
-**Max** von **−50 bis 0 dBFS**. Standard ist **−90 / −20 dBFS**; Änderungen werden
-gespeichert und gelten für alle Modi. Niedrige Werte unterhalb 100 Hz verändern
-die gewählten Grenzen nicht.
+dBFS-Skala für Spektrum und Wasserfall. Bei SSTV läuft die Pegelautomatik immer:
+Die Automatik hält den Rauschteppich dunkel, mit sichtbaren schwachen Spuren,
+und setzt die obere Grenze
+mit 6 dB Reserve über den robust ermittelten Signalpegel. Kurze Syncimpulse werden
+berücksichtigt, einzelne Störungen verworfen. Änderungen werden geglättet; in
+Signalpausen bleibt die obere Grenze erhalten. Die untere Anzeigegrenze wird
+gegenüber der Rauschschätzung um 9 dB abgesenkt, ohne Max mitzuverschieben.
+Die Regler justieren **Min** und **Max** unabhängig um **−6 bis +6 dB** in
+1-dB-Schritten. **0 dB** behält die automatische Abstimmung bei. Min negativ
+macht den Hintergrund heller, Max positiv gibt starken Signalen mehr Reserve.
+Die Regler zeigen die gespeicherten Korrekturen; die Spektrumskala zeigt die
+tatsächlich verwendeten dBFS-Grenzen. Die Automatik arbeitet auch beim Verstellen
+weiter. Korrekturen werden getrennt von den digitalen Anzeigegrenzen gespeichert
+und bleiben nach einem Neustart sowie Eingangs- oder Moduswechsel erhalten.
+Audioeingang und Decoder werden nicht verändert.
 Eine grüne Hilfslinie markiert **Sync 1200 Hz**, gelbe Linien begrenzen das
 schattierte **Bildsignal 1500–2300 Hz**. Die Hilfslinien in Spektrum und Wasserfall zeigen feste Sollfrequenzen
 im unveränderten Empfangsaudio vor der AFC. So kann der Operator am Funkgerät

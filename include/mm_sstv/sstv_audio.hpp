@@ -5,7 +5,7 @@
 #include <atomic>
 namespace mm_sstv {
 using SstvImage = qo100::sstv::Image;
-// Shared station calibration for analog picture audio and its waterfall ID.
+// Station calibration for analog picture audio; the SSTV waterfall ID adds 10 dB.
 inline constexpr float sstvMaximumGain = (.06f / .35f) * 1.15f * 1.20f;
 qo100::sstv::Mode sstvMode(Modulation mode);
 std::size_t sstvImageSamples(Modulation mode);

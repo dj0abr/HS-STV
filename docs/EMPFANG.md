@@ -63,6 +63,38 @@ Ein Sinus mit Spitzenamplitude 1 genau auf einem FFT-Bin entspricht 0 dBFS/Bin;
 Fensterverluste bei Zwischenfrequenzen sind möglich. Der Pegel oben rechts ist
 der RMS-Pegel des Eingangs. Die FFT erhält keine automatische Pegelnormierung.
 
+Für SSTV regelt die ständig laufende Pegelautomatik ausschließlich die
+Anzeigegrenzen von Spektrum und Wasserfall. Die Regler verändern diese Grenzen
+jeweils um −6 bis +6 dB in 1-dB-Schritten, ohne die Automatik zu unterbrechen.
+0 dB behält die automatische Abstimmung einschließlich der bewährten
+9-dB-Helligkeitskorrektur bei. Die Regler zeigen die Korrekturen, die Spektrumskala
+zeigt die tatsächlich verwendeten dBFS-Grenzen. Min negativ macht den Hintergrund
+heller; Max positiv gibt dem Signal mehr Reserve.
+`display/sstvMinOffset` und `display/sstvMaxOffset` speichern die Korrekturen
+unabhängig von den digitalen Anzeigegrenzen. Alte absolute SSTV-Grenzen werden
+nicht als Korrekturen übernommen; eine früher abgeschaltete Automatik läuft wieder.
+Korrekturen gehen nie in die Schätzung oder deren Rücksetzen ein und bleiben
+bei Eingangs- und Moduswechseln erhalten. Die absoluten Anzeigegrenzen bleiben
+auf Min −140 bis −10 dBFS und Max −120 bis 0 dBFS mit mindestens 10 dB Abstand begrenzt.
+
+`WaterfallAutoLevel` wertet bis zu zwei Sekunden der 10-ms-Wasserfallzeilen aus,
+erstmals nach einer halben Sekunde. Sie rechnet mit derselben FFT-Bandbreitenkorrektur
+und zeitlichen Maximumsbildung wie die Darstellung. Der Median jedes Spektrums
+hilft, schmale Träger und Bildtöne bei der Rauschmessung auszuschließen; das
+90-%-Quantil der verbleibenden Pixelmaxima plus 1 dB bestimmt den Ausgangswert.
+Die angezeigte Schwarzgrenze liegt 9 dB darunter (innerhalb der Anzeigegrenzen),
+damit der Hintergrund dunkel bleibt, schwache Spuren aber sichtbar werden.
+Diese Helligkeitskorrektur wirkt ausschließlich auf Min; die Schätzung und
+Nachführung von Max einschließlich des Startwerts bleiben davon unabhängig.
+Für Max dienen robuste 100-ms-Signalmaxima im Bereich 1000–2500 Hz, um den
+gemeldeten AFC-Versatz verschoben, mit 6 dB Reserve. Wiederkehrende kurze Syncs
+bleiben berücksichtigt, einzelne Impulse bestimmen die Skala nicht.
+Die Schwarzgrenze folgt mit drei Sekunden Zeitkonstante, Max bei stärkeren Signalen
+mit 0,35 und bei schwächeren mit acht Sekunden. Ohne ausreichend erkennbares Signal
+wird Max gehalten; digitale Stille wird nicht aufgehellt. Die Automatik verwendet
+mindestens 20 dB Anzeigespanne. Eingangs-, Modus- und FFT-Wechsel setzen die Messhistorie zurück.
+Audiopegel, AFC, AGC und Decoder werden dadurch nicht verändert.
+
 Der Bereich 20–900 Hz markiert die Pilotsuche. Die grüne Linie folgt dem vom
 Decoder gewählten Piloten, die gelben Linien markieren die aktuelle Datenmitte
 ±1200 Hz bei 8APSK bzw. ±1323 Hz bei QPSK (jeweils RRC-Rolloff 0,2). Beim Verkleinern bleiben schmale

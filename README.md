@@ -27,8 +27,16 @@ Bildschirm, und lässt sich bis **640 × 440 Pixel** verkleinern. Formatwahl und
 **Senden/STOP** liegen direkt über dem Sendebild; Die flachen Fortschrittsbalken stehen
 unter dem jeweiligen Bild: **TX rot**, **RX grün**. Die Signalanzeige ist kompakt darunter angeordnet.
 Links neben der kompakteren Signalanzeige regeln zwei senkrechte Schieber die
-Anzeigegrenzen für Spektrum und Wasserfall: **Min −100 bis −60 dBFS**,
-**Max −50 bis 0 dBFS**. Die Werte werden gespeichert; Standard ist **−90 / −20 dBFS**.
+Anzeigegrenzen für Spektrum und Wasserfall: digital **Min −100 bis −60 dBFS**,
+**Max −50 bis 0 dBFS**, Standard **−90 / −20 dBFS**.
+Bei SSTV läuft die Pegelautomatik immer: Der Rauschteppich bleibt dunkel,
+schwache Spuren bleiben sichtbar. Dazu wird die automatisch ermittelte Untergrenze
+um 9 dB abgesenkt; die obere Grenze behält ihre Helligkeitsreserve. Die beiden
+Regler justieren **Min** und **Max** unabhängig um **−6 bis +6 dB** in 1-dB-Schritten.
+**0 dB** entspricht der automatischen Abstimmung. Min negativ macht den Hintergrund
+heller, Max positiv gibt starken Signalen mehr Reserve. Die Regler zeigen die
+Korrekturen an; die tatsächlich verwendeten Grenzen stehen an der Spektrumskala.
+Korrekturen werden getrennt von den digitalen Anzeigegrenzen gespeichert.
 Lange Dateinamen und Statusmeldungen werden abgekürzt und sind per Tooltip
 vollständig lesbar. Die Vorschauen passen sich dem Fenster an; die gewählte
 Größe des übertragenen Bildes bleibt davon unabhängig.
@@ -112,7 +120,10 @@ Der Text folgt automatisch der Betriebsart. Die Auswahl wird gespeichert;
 standardmäßig ist sie aus. Ein 500-ms-Punkt mit 100 ms Abstand gibt einer audiogesteuerten PTT Zeit zum
 Anziehen, bevor der erste Buchstabe beginnt. Der Vorspann dauert einschließlich
 Pausen rund 10–13 s.
-Pegel und STOP gelten für Kennung und Bild. [Details](docs/WATERFALL-ID.md).
+Der Pegelregler wirkt auf Kennung und Bild. Bei SSTV wird die Kennung mit
+**10 dB mehr Pegel** gegenüber dem eingestellten SSTV-Bildpegel gesendet;
+bei 8APSK/QPSK erhält sie keine Anhebung. STOP bricht Kennung und Bild ab.
+[Details](docs/WATERFALL-ID.md).
 
 ## Rufzeichen und Textüberlagerung
 

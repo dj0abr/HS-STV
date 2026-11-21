@@ -2,6 +2,10 @@
 #include "mm_sstv/transmitter.hpp"
 #include <stdexcept>
 namespace mm_sstv {
+namespace {
+// +10 dB is an amplitude factor of 10^(10/20), applied only to the SSTV ID.
+constexpr float sstvWaterfallBoost = 3.162277660168379f;
+}
 Transmitter::Transmitter(std::unique_ptr<AudioOutput> output) : audio_(std::move(output)) {
     if (!audio_) throw std::invalid_argument("Missing audio output");
 }
@@ -50,7 +54,7 @@ void Transmitter::startSstv(const std::string& device, Modulation mode, const Ss
 }
 std::size_t Transmitter::renderImageAudio(float* output, std::size_t frames) {
     const float gain = level_.load(std::memory_order_relaxed);
-    const auto prefix = waterfall_ ? waterfall_->render(output, frames, sstv_ ? gain * sstvMaximumGain : gain) : 0;
+    const auto prefix = waterfall_ ? waterfall_->render(output, frames, sstv_ ? gain * sstvMaximumGain * sstvWaterfallBoost : gain) : 0;
     std::size_t count = prefix;
     if (prefix < frames) {
         if (sstv_) count += sstv_->render(output + prefix, frames - prefix, gain);

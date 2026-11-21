@@ -31,6 +31,8 @@
 #include <atomic>
 #include <chrono>
 #include <thread>
+#include <random>
+#include <cmath>
 using namespace mm_sstv;
 struct State {
     std::vector<AudioDevice> devices{{"other", "Other output"}, {"toQO100", "toQO100"}};
@@ -350,8 +352,8 @@ private slots:
             MainWindow window(std::make_unique<FakeOutput>(state), settings); window.resize(640, 440); window.show();
             auto* level = window.findChild<QSlider*>("outputLevel"); QVERIFY(level); QCOMPARE(level->orientation(), Qt::Vertical);
             auto* lower = window.findChild<QSlider*>("spectrumMin"); auto* upper = window.findChild<QSlider*>("spectrumMax"); QVERIFY(lower); QVERIFY(upper);
-            QCOMPARE(lower->minimum(), -100); QCOMPARE(lower->maximum(), -60); QCOMPARE(lower->value(), -90);
-            QCOMPARE(upper->minimum(), -50); QCOMPARE(upper->maximum(), 0); QCOMPARE(upper->value(), -20);
+            QCOMPARE(lower->minimum(), isSstv(mode) ? -6 : -100); QCOMPARE(lower->maximum(), isSstv(mode) ? 6 : -60); QCOMPARE(lower->value(), isSstv(mode) ? 0 : -90);
+            QCOMPARE(upper->minimum(), isSstv(mode) ? -6 : -50); QCOMPARE(upper->maximum(), isSstv(mode) ? 6 : 0); QCOMPARE(upper->value(), isSstv(mode) ? 0 : -20);
             QVERIFY(window.loadImage(picture(dir))); auto* button = window.findChild<QPushButton*>("transmitButton"); button->click();
             QVERIFY(state.open); QVERIFY(level->isEnabled()); QVERIFY(lower->isEnabled()); QVERIFY(upper->isEnabled());
             std::array<float, 4800> buffer{};
@@ -363,9 +365,16 @@ private slots:
             QCOMPARE(settings.value("audio/level").toInt(), 100);
             QCOMPARE(window.findChild<QLabel*>("outputLevelValue")->text(), QString("100 %"));
             auto* monitor = window.findChild<ReceiveMonitor*>("receiveMonitor"); QVERIFY(monitor);
-            lower->setValue(-60); upper->setValue(-50); QCOMPARE(monitor->minimumDb(), -60); QCOMPARE(monitor->maximumDb(), -50);
-            lower->setValue(-100); upper->setValue(0); QCOMPARE(monitor->minimumDb(), -100); QCOMPARE(monitor->maximumDb(), 0);
-            QCOMPARE(settings.value("display/minDb").toInt(), -100); QCOMPARE(settings.value("display/maxDb").toInt(), 0);
+            if (isSstv(mode)) {
+                lower->setValue(-6); upper->setValue(6); QVERIFY(monitor->autoLevel());
+                QCOMPARE(monitor->minimumDb(), -96); QCOMPARE(monitor->maximumDb(), -14);
+                QCOMPARE(settings.value("display/sstvMinOffset").toInt(), -6);
+                QCOMPARE(settings.value("display/sstvMaxOffset").toInt(), 6);
+            } else {
+                lower->setValue(-60); upper->setValue(-50); QCOMPARE(monitor->minimumDb(), -60); QCOMPARE(monitor->maximumDb(), -50);
+                lower->setValue(-100); upper->setValue(0); QCOMPARE(monitor->minimumDb(), -100); QCOMPARE(monitor->maximumDb(), 0);
+                QCOMPARE(settings.value("display/minDb").toInt(), -100); QCOMPARE(settings.value("display/maxDb").toInt(), 0);
+            }
             button->click(); QVERIFY(!state.open); QVERIFY(level->isEnabled());
             QTest::qWait(20); QCOMPARE(window.size(), QSize(640, 440));
             if (qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT"))
@@ -373,10 +382,120 @@ private slots:
         }
         MainWindow restored(std::make_unique<FakeOutput>(state), settings);
         QCOMPARE(restored.findChild<QSlider*>("outputLevel")->value(), 100);
-        QCOMPARE(restored.findChild<QSlider*>("spectrumMin")->value(), -100);
-        QCOMPARE(restored.findChild<QSlider*>("spectrumMax")->value(), 0);
+        QCOMPARE(restored.findChild<QSlider*>("spectrumMin")->value(), isSstv(mode) ? -6 : -100);
+        QCOMPARE(restored.findChild<QSlider*>("spectrumMax")->value(), isSstv(mode) ? 6 : 0);
         auto* monitor = restored.findChild<ReceiveMonitor*>("receiveMonitor");
-        QCOMPARE(monitor->minimumDb(), -100); QCOMPARE(monitor->maximumDb(), 0);
+        QCOMPARE(monitor->minimumDb(), isSstv(mode) ? -96 : -100); QCOMPARE(monitor->maximumDb(), isSstv(mode) ? -14 : 0);
+    }
+    void automaticWaterfallControls() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state; CaptureState capture;
+        settings.setValue("modem/modulation", "martin1");
+        settings.setValue("display/minDb", -85); settings.setValue("display/maxDb", -15);
+        settings.setValue("display/sstvAutoLevel", false);
+        settings.setValue("display/sstvMinDb", -120); settings.setValue("display/sstvMaxDb", -35);
+        {
+            MainWindow window(std::make_unique<FakeOutput>(state), settings, std::make_unique<FakeCapture>(capture));
+            window.resize(640, 440); window.show(); QTRY_VERIFY(capture.open);
+            QVERIFY(!window.findChild<QCheckBox*>("waterfallAutoLevel")); QVERIFY(!settings.contains("display/sstvAutoLevel"));
+            auto* lower = window.findChild<QSlider*>("spectrumMin"); auto* upper = window.findChild<QSlider*>("spectrumMax");
+            auto* monitor = window.findChild<ReceiveMonitor*>("receiveMonitor"); QVERIFY(monitor->autoLevel());
+            QCOMPARE(lower->value(), 0); QCOMPARE(upper->value(), 0);
+            QCOMPARE(lower->singleStep(), 1); QCOMPARE(lower->pageStep(), 1); QCOMPARE(upper->pageStep(), 1);
+            std::mt19937 random(127); std::normal_distribution<float> noise(0, .0005f);
+            std::array<float, 4800> audio{}; std::size_t time = 0;
+            for (int block = 0; block < 40; ++block) {
+                for (auto& sample : audio) { sample = noise(random) + float(.01 * std::sin(2 * 3.141592653589793 * 1800 * time / 48000)); ++time; }
+                capture.consume(audio.data(), audio.size()); QTest::qWait(3);
+            }
+            QTRY_VERIFY(monitor->maximumDb() < -40); QVERIFY(monitor->minimumDb() < -90);
+            QCOMPARE(lower->value(), 0); QCOMPARE(upper->value(), 0);
+            QCOMPARE(window.findChild<QLabel*>("spectrumMinValue")->text(), QString("0 dB"));
+            QCOMPARE(window.findChild<QLabel*>("spectrumMaxValue")->text(), QString("0 dB"));
+            const int automaticMin = monitor->minimumDb(), automaticMax = monitor->maximumDb();
+            lower->setValue(-3); QCOMPARE(monitor->minimumDb(), automaticMin - 3); QCOMPARE(monitor->maximumDb(), automaticMax);
+            upper->setValue(4); QCOMPARE(monitor->maximumDb(), automaticMax + 4); QVERIFY(monitor->autoLevel());
+            QCOMPARE(settings.value("display/sstvMinOffset").toInt(), -3); QCOMPARE(settings.value("display/sstvMaxOffset").toInt(), 4);
+            QCOMPARE(window.findChild<QLabel*>("spectrumMinValue")->text(), QString("-3 dB"));
+            QCOMPARE(window.findChild<QLabel*>("spectrumMaxValue")->text(), QString("+4 dB"));
+            // A new stronger signal must still move the automatic limit, while
+            // the handles remain at the user's correction values.
+            for (int block = 0; block < 30; ++block) {
+                for (auto& sample : audio) { sample = noise(random) + float(.03 * std::sin(2 * 3.141592653589793 * 1800 * time / 48000)); ++time; }
+                capture.consume(audio.data(), audio.size()); QTest::qWait(3);
+            }
+            QTRY_VERIFY(monitor->maximumDb() > automaticMax + 7);
+            QCOMPARE(lower->value(), -3); QCOMPARE(upper->value(), 4); QVERIFY(monitor->autoLevel());
+            if (qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT"))
+                QVERIFY(window.grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + ".auto-level.png"));
+            auto* modes = window.findChild<QComboBox*>("modulation"); modes->setCurrentIndex(0);
+            QVERIFY(!monitor->autoLevel());
+            QCOMPARE(lower->value(), -85); QCOMPARE(upper->value(), -15);
+            QCOMPARE(lower->minimum(), -100); QCOMPARE(upper->minimum(), -50);
+            modes->setCurrentIndex(modes->findData(int(Modulation::Scottie2)));
+            QVERIFY(monitor->autoLevel()); QCOMPARE(lower->value(), -3); QCOMPARE(upper->value(), 4);
+            QCOMPARE(window.size(), QSize(640, 440));
+        }
+        MainWindow restored(std::make_unique<FakeOutput>(state), settings);
+        QVERIFY(!restored.findChild<QCheckBox*>("waterfallAutoLevel"));
+        QCOMPARE(restored.findChild<QSlider*>("spectrumMin")->value(), -3);
+        QCOMPARE(restored.findChild<QSlider*>("spectrumMax")->value(), 4);
+        QVERIFY(restored.findChild<ReceiveMonitor*>("receiveMonitor")->autoLevel());
+    }
+    void savedWaterfallAdjustmentsClamped() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
+        settings.setValue("modem/modulation", "martin2");
+        settings.setValue("display/sstvMinOffset", 99); settings.setValue("display/sstvMaxOffset", -99);
+        MainWindow window(std::make_unique<FakeOutput>(state), settings);
+        QCOMPARE(window.findChild<QSlider*>("spectrumMin")->value(), 6);
+        QCOMPARE(window.findChild<QSlider*>("spectrumMax")->value(), -6);
+        QCOMPARE(settings.value("display/sstvMinOffset").toInt(), 6);
+        QCOMPARE(settings.value("display/sstvMaxOffset").toInt(), -6);
+    }
+    void waterfallAdjustmentLabelsAcrossModes() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
+        settings.setValue("display/maxDb", 0);
+        MainWindow window(std::make_unique<FakeOutput>(state), settings);
+        auto* modes = window.findChild<QComboBox*>("modulation");
+        auto* number = window.findChild<QLabel*>("spectrumMaxValue");
+        QCOMPARE(number->text(), QString("0"));
+        for (int at = 0; at < 2; ++at) {
+            modes->setCurrentIndex(modes->findData(int(Modulation::Martin1)));
+            QCOMPARE(number->text(), QString("0 dB"));
+            modes->setCurrentIndex(0); QCOMPARE(number->text(), QString("0"));
+        }
+    }
+    void automaticWaterfallAdjustmentsAndReset() {
+        ReceiveMonitor monitor; monitor.clear({}, Modulation::Martin1); monitor.resize(800, 164);
+        ReceiveStatus status; status.modulation = Modulation::Martin1;
+        status.spectrumBinHz = 48000. / 32768; status.waterfallBinHz = 48000. / 2048;
+        std::vector<float> row(171, -90.f); row[77] = -45;
+        status.waterfall.assign(10, row);
+        for (int at = 0; at < 8; ++at) monitor.setStatus(status);
+        QCOMPARE(monitor.minimumDb(), -110); QCOMPARE(monitor.maximumDb(), -51);
+        const auto background = monitor.grab().toImage().pixelColor(220, 85);
+        QVERIFY(background.value() > 0); QVERIFY(background.value() < 100);
+        monitor.setLevelAdjustments(-6, 6);
+        QCOMPARE(monitor.minimumDb(), -116); QCOMPARE(monitor.maximumDb(), -45);
+        monitor.setLevelAdjustments(6, -6);
+        QCOMPARE(monitor.minimumDb(), -104); QCOMPARE(monitor.maximumDb(), -57);
+        for (int at = 0; at < 30; ++at) monitor.setStatus(status);
+        QCOMPARE(monitor.minimumDb(), -104); QCOMPARE(monitor.maximumDb(), -57); // No cumulative drift.
+        monitor.setLevelAdjustments(0, 0);
+        QCOMPARE(monitor.minimumDb(), -110); QCOMPARE(monitor.maximumDb(), -51); // Accepted brightness at zero.
+        monitor.setLevelAdjustments(3, -2); monitor.clear({}, Modulation::Martin1);
+        monitor.setStatus(status); QCOMPARE(monitor.minimumDb(), -87); QCOMPARE(monitor.maximumDb(), -22);
+        for (int at = 0; at < 6; ++at) monitor.setStatus(status);
+        QCOMPARE(monitor.minimumDb(), -107); QCOMPARE(monitor.maximumDb(), -53);
+        // A new FFT grid also resets history without feeding back corrections.
+        status.waterfallBinHz = 20; status.waterfall.assign(10, std::vector<float>(201, -90));
+        status.waterfall[0][90] = -40;
+        monitor.setStatus(status);
+        QCOMPARE(monitor.minimumDb(), -107); QCOMPARE(monitor.maximumDb(), -53);
+        monitor.clear({}, Modulation::Qpsk4410); status.modulation = Modulation::Qpsk4410;
+        monitor.setDbRange(-85, -20); monitor.setLevelAdjustments(-99, 99);
+        for (int at = 0; at < 8; ++at) monitor.setStatus(status);
+        QCOMPARE(monitor.minimumDb(), -85); QCOMPARE(monitor.maximumDb(), -20);
+        QVERIFY(!monitor.autoLevel());
     }
     void waterfallNoiseFloorMatchesSpectrum() {
         ReceiveMonitor monitor; monitor.resize(800, 164);
@@ -391,6 +510,7 @@ private slots:
         std::vector<float> row(171, -63.9588f);
         for (int bin = 80; bin < 100; ++bin) row[bin] = -10.f;
         status.waterfall.assign(600, row); monitor.setStatus(status);
+        monitor.setDbRange(-68, -35); // Isolate renderer calibration from the live estimator.
         auto frame = monitor.grab().toImage();
         QCOMPARE(frame.pixelColor(220, 120), QColor(Qt::black));
         QCOMPARE(frame.pixelColor(430, 120), QColor(Qt::red));

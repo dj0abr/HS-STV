@@ -24,22 +24,47 @@ void ReceiveMonitor::clear(const QString& message, Modulation mode) {
     setMaximumHeight(isSstv(mode) ? 180 : 144); setMinimumHeight(isSstv(mode) ? 144 : 96);
     setToolTip(isSstv(mode) ? "SSTV-Spektrum und Wasserfall · 0–4000 Hz\nWasserfall: neueste Werte oben · 6 Sekunden Verlauf · 23,4 Hz Frequenzauflösung · 43-ms-Analysefenster\nFarben: an und unter Min schwarz · an und über Max rot\nSync: 1200 Hz · Bildsignal: 1500–2300 Hz (schattiert)\nHilfslinien zeigen die Sollfrequenzen vor AFC; Frequenz am Funkgerät fein abstimmen." :
         "Empfangsaudio vor AFC und AGC · 0–4000 Hz\nGrün: erkannter Pilot · Fläche: Pilotsuche 20–900 Hz\nGelb: Datenband · Konstellation: empfangene I/Q-Symbole");
-    status_ = {}; status_.modulation = mode; status_.state = message; points_.clear(); waterfall_.clear(); waterfallBinHz_ = 0; updateGeometry(); update();
+    status_ = {}; status_.modulation = mode; status_.state = message; points_.clear(); waterfall_.clear(); waterfallBinHz_ = 0;
+    automaticMinDb_ = -90; automaticMaxDb_ = -20; autoLevel_.reset();
+    if (isSstv(mode)) applyAutoLevels(); else setDbRange(minDb_, maxDb_);
+    updateGeometry(); update();
 }
 void ReceiveMonitor::setDbRange(int minimum, int maximum) {
-    minDb_ = std::clamp(minimum, -100, -60); maxDb_ = std::clamp(maximum, -50, 0);
+    const bool analog = isSstv(status_.modulation);
+    minDb_ = std::clamp(minimum, analog ? -140 : -100, analog ? -10 : -60);
+    maxDb_ = std::max(minDb_ + 10, std::clamp(maximum, analog ? -120 : -50, 0));
     update();
+}
+void ReceiveMonitor::setLevelAdjustments(int minimum, int maximum) {
+    minAdjustment_ = std::clamp(minimum, -6, 6); maxAdjustment_ = std::clamp(maximum, -6, 6);
+    if (isSstv(status_.modulation)) applyAutoLevels();
+}
+void ReceiveMonitor::applyAutoLevels() {
+    // Apply user corrections only to the display, never to estimator history.
+    setDbRange(automaticMinDb_ + minAdjustment_, automaticMaxDb_ + maxAdjustment_);
 }
 void ReceiveMonitor::setStatus(const ReceiveStatus& status) {
     if (status.modulation != status_.modulation || status.locked != status_.locked || std::abs(status.center - status_.center) > 20 || status.points.empty()) points_.clear();
     if (status.modulation != status_.modulation || (status.spectrum.empty() && status.waterfall.empty()) ||
-        (!status.waterfall.empty() && status.waterfallBinHz != waterfallBinHz_)) waterfall_.clear();
+        (!status.waterfall.empty() && (status.waterfallBinHz != waterfallBinHz_ || status.spectrumBinHz != status_.spectrumBinHz))) {
+        waterfall_.clear(); autoLevel_.reset();
+    }
     if (!status.waterfall.empty()) {
         waterfallBinHz_ = status.waterfallBinHz;
         for (const auto& row : status.waterfall) waterfall_.push_back(row);
         while (waterfall_.size() > 600) waterfall_.pop_front();
     }
     status_ = status;
+    if (isSstv(status.modulation) && status.waterfallBinHz > 0) {
+        const double referenceBinHz = status.spectrumBinHz > 0 ? status.spectrumBinHz : AudioSpectrum::binHz;
+        const double bandwidthDb = 10 * std::log10(status.waterfallBinHz / referenceBinHz);
+        const int rows = std::max(1, int((height() - 44) * .58 - 4));
+        if (autoLevel_.update(status.waterfall, status.waterfallBinHz, bandwidthDb, status.offset,
+                              std::size_t((600 + rows - 1) / rows))) {
+            automaticMinDb_ = autoLevel_.minimumDb(); automaticMaxDb_ = autoLevel_.maximumDb();
+            applyAutoLevels();
+        }
+    }
     for (const auto& point : status.points) points_.emplace_back(point[0], point[1]);
     while (points_.size() > 600) points_.pop_front();
     update();

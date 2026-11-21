@@ -25,8 +25,13 @@ Die Audioverbindung wird dabei nicht geschlossen oder neu geöffnet.
 Die angegebene Sendedauer und der TX-Fortschritt berücksichtigen Punktvorlauf und Kennung.
 Der Status wechselt von **Sendet Waterfall-ID** auf **Sendet Bild**.
 
-Der Pegelregler wirkt auch während der Kennung. Bei SSTV gilt der gleiche kalibrierte
-Maximalpegel wie für das Bildsignal. **STOP** bricht Kennung und Bild gemeinsam ab.
+Der Pegelregler wirkt auch während der Kennung. Nur bei SSTV wird ihr Pegel
+gegenüber dem eingestellten, kalibrierten SSTV-Bildpegel um **10 dB** angehoben
+(Amplitudenfaktor √10 ≈ 3,1623). Bei 100 % entspricht das für die Kennung
+etwa 74,8 % Vollaussteuerung statt 23,66 % für das SSTV-Bildsignal.
+8APSK und QPSK erhalten keine Pegelanhebung. Bei 0 % bleibt auch die Kennung stumm.
+Die Anhebung endet mit der Kennung; das Bild wird mit seinem eingestellten Pegel gesendet.
+**STOP** bricht Kennung und Bild gemeinsam ab.
 Während der Sendung ist die Checkbox gesperrt. Ohne Häkchen beginnt die bisherige
 Bildsendung direkt; Bildprotokoll, VIS und Bilddaten bleiben unverändert.
 
@@ -54,7 +59,9 @@ Die vorhandenen PulseAudio-/PortAudio-Adapter bleiben unverändert.
 dem sofort aktiven Punktvorlauf, der vollständigen Referenzrasterfolge R_F,
 Pausen, Flanken, Pegeländerung und Clipping.
 Für alle sechs Modi werden Kennung, Kalibrierung, Samplezahl, Fortschritt und
-Abbruch geprüft. Die ersten Bildsamples hinter der Kennung müssen exakt dem
+Abbruch bei 35 % und 100 % Pegel geprüft. Eine Leistungsmessung nach der
+Anfangsrampe prüft unabhängig die Anhebung um 10 dB bei SSTV und 0 dB bei
+8APSK/QPSK sowie die Einhaltung der Vollaussteuerung. Die ersten Bildsamples hinter der Kennung müssen exakt dem
 bisherigen Sender entsprechen, auch bei einem Wechsel mitten im Audio-Callback.
 Bei digitaler Übertragung werden zusätzlich Ende und vollständiger Ablauf geprüft.
 Der GUI-Test prüft gespeicherte Auswahl, Moduswechsel und STOP während der Kennung

@@ -29,6 +29,7 @@
 #include <QPushButton>
 #include <QSlider>
 #include <QSignalBlocker>
+#include <QScopedValueRollback>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -158,24 +159,28 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
         auto* caption = new QLabel(title, control); caption->setAlignment(Qt::AlignCenter);
         auto* number = new QLabel(QString::number(value), control); number->setObjectName(name + "Value"); number->setAlignment(Qt::AlignCenter);
         auto font = caption->font(); font.setPointSizeF(8); caption->setFont(font); number->setFont(font);
-        control->setFixedWidth(std::max(number->fontMetrics().horizontalAdvance("−100"), caption->sizeHint().width()) + 6);
+        control->setFixedWidth(std::max({number->fontMetrics().horizontalAdvance("−100"), number->fontMetrics().horizontalAdvance("+6 dB"), caption->sizeHint().width()}) + 6);
         auto* range = new QSlider(Qt::Vertical, control); range->setObjectName(name); range->setAccessibleName(help); range->setToolTip(help);
         range->setRange(minimum, maximum); range->setValue(value);
         column->addWidget(caption); column->addWidget(range, 1, Qt::AlignHCenter); column->addWidget(number);
-        connect(range, &QSlider::valueChanged, this, [number](int db) { number->setText(QString::number(db)); });
+        connect(range, &QSlider::valueChanged, this, [this, number](int db) {
+            number->setText(isSstv(mode_) ? (db > 0 ? "+" : "") + QString::number(db) + " dB" : QString::number(db));
+        });
         monitorRow->addWidget(control); return range;
     };
-    auto* lower = addRangeControl("Min", "spectrumMin", -100, -60,
-        std::clamp(settings_.value("display/minDb", -90).toInt(), -100, -60), "Untere Grenze für Spektrum und Wasserfall: −100 bis −60 dBFS");
-    auto* upper = addRangeControl("Max", "spectrumMax", -50, 0,
-        std::clamp(settings_.value("display/maxDb", -20).toInt(), -50, 0), "Obere Grenze für Spektrum und Wasserfall: −50 bis 0 dBFS");
-    monitor_->setDbRange(lower->value(), upper->value());
-    const auto updateRange = [this, lower, upper] {
-        monitor_->setDbRange(lower->value(), upper->value());
-        settings_.setValue("display/minDb", lower->value()); settings_.setValue("display/maxDb", upper->value());
+    minimumDb_ = addRangeControl("Min", "spectrumMin", -140, -10, -90, {});
+    maximumDb_ = addRangeControl("Max", "spectrumMax", -120, 0, -20, {});
+    minimumDbValue_ = minimumDb_->parentWidget()->findChild<QLabel*>("spectrumMinValue");
+    maximumDbValue_ = maximumDb_->parentWidget()->findChild<QLabel*>("spectrumMaxValue");
+    settings_.remove("display/sstvAutoLevel"); // SSTV display levels are always automatic.
+    const auto updateRange = [this] {
+        if (updatingDisplayRange_) return;
+        if (isSstv(mode_)) monitor_->setLevelAdjustments(minimumDb_->value(), maximumDb_->value());
+        else monitor_->setDbRange(minimumDb_->value(), maximumDb_->value());
+        syncDisplayRange(); saveDisplayRange();
     };
-    connect(lower, &QSlider::valueChanged, this, updateRange); connect(upper, &QSlider::valueChanged, this, updateRange);
-    updateRange(); // Persist clamped values after changing the permitted range.
+    connect(minimumDb_, &QSlider::valueChanged, this, updateRange); connect(maximumDb_, &QSlider::valueChanged, this, updateRange);
+    restoreDisplayRange();
     monitorRow->addWidget(monitor_, 1); layout->addLayout(monitorRow);
     auto* footer = new QHBoxLayout; footer->setSpacing(8);
     status_ = new CompactLabel(central, Qt::ElideRight); status_->setObjectName("statusText"); footer->addWidget(status_, 1);
@@ -187,7 +192,7 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     modes_->setToolTip("Modus für Senden und Empfang; beide Stationen gleich einstellen.\n8APSK/QPSK: HS-Modem-kompatibel mit 100-Hz-Referenzträger.\nSSTV Martin 1/2 und Scottie 1/2: 320 × 256 Pixel, Sync 1200 Hz, Bildsignal 1500–2300 Hz.");
     waterfallId_ = new QCheckBox("Waterfall-ID", central); waterfallId_->setObjectName("waterfallId");
     waterfallId_->setChecked(settings_.value("transmit/waterfallId", false).toBool());
-    waterfallId_->setToolTip("Vor jeder Bildsendung HS-STV und die gewählte Betriebsart als Wasserfalltext senden.\nDer Sendepegel gilt auch für die Kennung; STOP bricht die gesamte Sendung ab.");
+    waterfallId_->setToolTip("Vor jeder Bildsendung HS-STV und die gewählte Betriebsart als Wasserfalltext senden.\nSSTV: Kennung 10 dB über dem eingestellten Bildpegel · Digital: keine Pegelanhebung.\nDer Pegelregler wirkt auch auf die Kennung; STOP bricht die gesamte Sendung ab.");
     connect(waterfallId_, &QCheckBox::toggled, this, [this](bool enabled) {
         settings_.setValue("transmit/waterfallId", enabled); prepare();
     });
@@ -211,7 +216,7 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     receiver_.sstvReceived = [this](const SstvUpdate& update) { receivedSstv(update); };
     receiver_.imageReceived = [this](const ReceivedImage& image) { receivedImage(image); };
     receiver_.statusChanged = [this](const ReceiveStatus& status) {
-        monitor_->setStatus(status); showReceiveStatistics(status);
+        monitor_->setStatus(status); syncDisplayRange(); showReceiveStatistics(status);
         QString details = status.state;
         if (status.pilot >= 0) details += QString(" · Pilot %1 Hz").arg(status.pilot, 0, 'f', 1);
         if (status.frames) details += QString(isSstv(status.modulation) ? " · AFC %1 Hz · %2 Bildzeilen" : " · AFC %1 Hz · %2 gültige Frames").arg(status.offset, 0, 'f', 1).arg(qulonglong(status.frames));
@@ -386,12 +391,48 @@ void MainWindow::editTextOverlay() {
 void MainWindow::restartReceiver() {
     archiveSstv();
     monitor_->clear("Warte auf Audiodaten", mode_); receiveStatus_->setToolTip({});
+    restoreDisplayRange();
     receiveRetry_->stop();
     if (!receiver_.available()) { receiveStatus_->setText("Kein Audioeingang"); return; }
     try { receiver_.start(inputDevice_, mode_); }
     catch (const std::exception& e) {
         receiveStatus_->setText(QString::fromUtf8(e.what())); receiveRetry_->start();
     }
+}
+void MainWindow::syncDisplayRange() {
+    const QScopedValueRollback<bool> updating(updatingDisplayRange_, true);
+    const bool analog = isSstv(mode_);
+    minimumDb_->setValue(analog ? monitor_->minimumAdjustment() : monitor_->minimumDb());
+    maximumDb_->setValue(analog ? monitor_->maximumAdjustment() : monitor_->maximumDb());
+    // Zero is valid in both modes: refresh formatting even without valueChanged.
+    const auto labelText = [analog](int db) {
+        return analog ? (db > 0 ? "+" : "") + QString::number(db) + " dB" : QString::number(db);
+    };
+    minimumDbValue_->setText(labelText(minimumDb_->value())); maximumDbValue_->setText(labelText(maximumDb_->value()));
+}
+void MainWindow::saveDisplayRange() {
+    const bool analog = isSstv(mode_);
+    settings_.setValue(analog ? "display/sstvMinOffset" : "display/minDb", analog ? monitor_->minimumAdjustment() : monitor_->minimumDb());
+    settings_.setValue(analog ? "display/sstvMaxOffset" : "display/maxDb", analog ? monitor_->maximumAdjustment() : monitor_->maximumDb());
+}
+void MainWindow::restoreDisplayRange() {
+    const QScopedValueRollback<bool> updating(updatingDisplayRange_, true);
+    const bool analog = isSstv(mode_);
+    minimumDb_->setRange(analog ? -6 : -100, analog ? 6 : -60);
+    maximumDb_->setRange(analog ? -6 : -50, analog ? 6 : 0);
+    minimumDb_->setSingleStep(1); maximumDb_->setSingleStep(1);
+    minimumDb_->setPageStep(analog ? 1 : 10); maximumDb_->setPageStep(analog ? 1 : 10);
+    minimumDb_->setToolTip(analog ? "Untere Automatikgrenze feinjustieren: −6 bis +6 dB · 0 = automatische Abstimmung\nNegativ: hellerer Hintergrund · positiv: dunklerer Hintergrund · Automatik läuft immer" :
+        "Untere Grenze für Spektrum: −100 bis −60 dBFS");
+    maximumDb_->setToolTip(analog ? "Obere Automatikgrenze feinjustieren: −6 bis +6 dB · 0 = automatische Abstimmung\nPositiv: mehr Reserve, dunkleres Signal · negativ: helleres Signal · Automatik läuft immer" :
+        "Obere Grenze für Spektrum: −50 bis 0 dBFS");
+    minimumDb_->setAccessibleName(minimumDb_->toolTip()); maximumDb_->setAccessibleName(maximumDb_->toolTip());
+    if (analog) {
+        monitor_->setLevelAdjustments(settings_.value("display/sstvMinOffset", 0).toInt(), settings_.value("display/sstvMaxOffset", 0).toInt());
+    } else {
+        monitor_->setDbRange(settings_.value("display/minDb", -90).toInt(), settings_.value("display/maxDb", -20).toInt());
+    }
+    syncDisplayRange(); saveDisplayRange();
 }
 void MainWindow::receivedImage(const ReceivedImage& image) {
     if (image.newImage) {

@@ -64,9 +64,10 @@ void checkRaster(unsigned rate) {
     live.render(block.data(), block.size(), 1);
     require(std::any_of(block.begin() + rate / 200, block.end(), [](float x) { return std::abs(x) > .001; }), "Live level change did not restore ID");
 }
-void checkTransmission(Modulation mode, const std::filesystem::path& outputFolder) {
+void checkTransmission(Modulation mode, const std::filesystem::path& outputFolder, unsigned percent) {
     const auto text = waterfallIdText(mode); const auto idFrames = waterfallIdSamples(mode);
-    auto output = std::make_unique<Output>(); auto* device = output.get(); Transmitter tx(std::move(output)); tx.setLevel(100);
+    auto output = std::make_unique<Output>(); auto* device = output.get(); Transmitter tx(std::move(output)); tx.setLevel(percent);
+    const float gain = percent / 100.f;
     const std::vector<std::uint8_t> jpeg{0xff,0xd8,0xff,0xd9}; SstvImage picture{};
     auto start = [&](bool enabled) {
         if (isSstv(mode)) tx.startSstv("test", mode, picture, enabled);
@@ -81,18 +82,30 @@ void checkTransmission(Modulation mode, const std::filesystem::path& outputFolde
     }
     require(!tx.sendingWaterfallId() && device->starts == 1, "ID/picture transition reopened audio");
     WaterfallTextAudio expectedId(text, device->rate); std::vector<float> expected(idFrames);
-    expectedId.render(expected.data(), expected.size(), isSstv(mode) ? sstvMaximumGain : 1);
-    require(std::equal(expected.begin(), expected.end(), actual.begin()), "Wrong prefix or SSTV calibration");
+    const float boost = float(std::pow(10., 10. / 20.));
+    expectedId.render(expected.data(), expected.size(), isSstv(mode) ? gain * sstvMaximumGain * boost : gain);
+    require(std::equal(expected.begin(), expected.end(), actual.begin()), "Wrong prefix or SSTV ID boost");
+    WaterfallTextAudio unboostedId(text, device->rate); std::vector<float> unboosted(idFrames);
+    unboostedId.render(unboosted.data(), unboosted.size(), isSstv(mode) ? gain * sstvMaximumGain : gain);
+    double actualPower = 0, referencePower = 0;
+    // Skip the initial gain ramp; measure the complete text, including lead-in.
+    for (std::size_t at = device->rate / 100; at < idFrames; ++at) {
+        require(std::isfinite(actual[at]) && std::abs(actual[at]) < 1, "ID clipped at configured TX level");
+        actualPower += double(actual[at]) * actual[at];
+        referencePower += double(unboosted[at]) * unboosted[at];
+    }
+    const double differenceDb = 10 * std::log10(actualPower / referencePower);
+    require(std::abs(differenceDb - (isSstv(mode) ? 10 : 0)) < 1e-4, "Measured ID gain is not +10 dB for SSTV / 0 dB for digital");
     std::array<float,4096> expectedPicture{};
     std::size_t pictureFrames = 0;
     if (isSstv(mode)) {
-        SstvAudio reference(mode, picture); reference.render(expectedPicture.data(), expectedPicture.size(), 1); pictureFrames = reference.frames();
+        SstvAudio reference(mode, picture); reference.render(expectedPicture.data(), expectedPicture.size(), gain); pictureFrames = reference.frames();
     } else {
-        ImageAudio reference(prepareImage(jpeg, "test.jpg", mode)); reference.render(expectedPicture.data(), expectedPicture.size(), 1); pictureFrames = reference.frames();
+        ImageAudio reference(prepareImage(jpeg, "test.jpg", mode)); reference.render(expectedPicture.data(), expectedPicture.size(), gain); pictureFrames = reference.frames();
     }
     require(std::equal(expectedPicture.begin(), expectedPicture.end(), actual.begin() + idFrames), "ID changed picture samples");
     require(tx.progress() == (idFrames + 4096) * 100 / (idFrames + pictureFrames), "Progress ignores prefix");
-    if (!outputFolder.empty()) {
+    if (!outputFolder.empty() && percent == 100) {
         std::ofstream file(outputFolder / (std::string("id-") + modeKey(mode) + ".f32"), std::ios::binary);
         file.write(reinterpret_cast<const char*>(actual.data()), std::streamsize(idFrames * sizeof(float)));
         require(bool(file), "Cannot export test ID");
@@ -110,6 +123,8 @@ void checkTransmission(Modulation mode, const std::filesystem::path& outputFolde
     std::array<float,4096> live{}; device->render(live.data(), live.size()); tx.setLevel(0);
     device->render(live.data(), live.size());
     require(std::all_of(live.begin() + device->rate / 200, live.end(), [](float x) { return x == 0; }), "TX level did not mute ID");
+    tx.setLevel(percent); device->render(live.data(), live.size());
+    require(std::any_of(live.begin() + device->rate / 200, live.end(), [](float x) { return std::abs(x) > .001; }), "TX level did not restore ID");
     tx.stop(); require(!device->render, "STOP during ID left callback active");
 }
 }
@@ -124,7 +139,10 @@ int main(int argc, char** argv) {
         if (argc == 2) { outputFolder = argv[1]; std::filesystem::create_directories(outputFolder); }
         const std::array<Modulation,6> modes{Modulation::Apsk8,Modulation::Qpsk4410,Modulation::Martin1,Modulation::Martin2,Modulation::Scottie1,Modulation::Scottie2};
         const std::array<std::string,6> labels{"HS-STV 8APSK","HS-STV QPSK","HS-STV MARTIN1","HS-STV MARTIN2","HS-STV SCOTTIE1","HS-STV SCOTTIE2"};
-        for (std::size_t i=0;i<modes.size();++i) { require(waterfallIdText(modes[i]) == labels[i], "Wrong mode label"); checkTransmission(modes[i], outputFolder); }
-        std::cout << "Waterfall ID: active PTT dot lead-in, glyph orientation, 63 comb tones, 44.1/48 kHz, live gain, six modes, sample-exact picture transition, progress, STOP and disabled path passed\n";
+        for (std::size_t i=0;i<modes.size();++i) {
+            require(waterfallIdText(modes[i]) == labels[i], "Wrong mode label");
+            for (const auto percent : {35u, 100u}) checkTransmission(modes[i], outputFolder, percent);
+        }
+        std::cout << "Waterfall ID: PTT lead-in, glyphs, 63 tones, 44.1/48 kHz, SSTV +10 dB / digital unchanged at 35/100%, live gain, clipping, picture transition, progress, STOP and disabled path passed\n";
     } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }
