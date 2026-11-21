@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "beacon_view.hpp"
 #include <QPlainTextEdit>
+#include <QLabel>
 #include <QScrollBar>
 #include <QTextCursor>
 #include <QTextDocument>
@@ -35,6 +36,32 @@ private slots:
         QCOMPARE(text->document()->blockCount(), BeaconView::maximumMessages);
         QVERIFY(text->toPlainText().startsWith("13:00:00Z  SPOT-100 "));
         QVERIFY(text->toPlainText().contains("SPOT-1099 "));
+    }
+    void bulletinIsKeptDuringIncompleteReceptionAndDuplicatesDoNotScroll() {
+        BeaconView view; view.resize(700, 350); view.show();
+        Bulletin bulletin; bulletin.filename = "news.blt"; bulletin.digest = "first";
+        bulletin.receivedAt = QDateTime::currentDateTimeUtc(); bulletin.text = QString("<b>Plain text</b>\n").repeated(100);
+        view.showBulletin(bulletin); QTest::qWait(20);
+        auto* text = view.findChild<QPlainTextEdit*>("beaconBulletinText");
+        QCOMPARE(text->toPlainText(), bulletin.text);
+        auto* scroll = text->verticalScrollBar(); scroll->setValue(20); const int reading = scroll->value();
+        view.showBulletinProgress({"next.blt", {}, 2, 8, false, false});
+        QCOMPARE(text->toPlainText(), bulletin.text);
+        QVERIFY(view.findChild<QLabel*>("beaconBulletinStatus")->text().contains("2/8"));
+        view.showBulletinProgress({"next.blt", "ZIP-Prüfsumme ist falsch", 8, 8, false, true});
+        QCOMPARE(text->toPlainText(), bulletin.text);
+        view.showBulletin(bulletin); QCOMPARE(scroll->value(), reading);
+        bulletin.digest = "second"; bulletin.text = "Neues Bulletin";
+        view.showBulletin(bulletin); QCOMPARE(text->toPlainText(), bulletin.text); QCOMPARE(scroll->value(), 0);
+    }
+    void longBulletinShowsBeginningAndTruncationMarker() {
+        BeaconView view; Bulletin bulletin; bulletin.filename = "long.blt"; bulletin.digest = "long";
+        bulletin.title = "<img src='file:///not-a-resource'>";
+        bulletin.text = "Anfang\n" + QString(80000, 'x'); view.showBulletin(bulletin);
+        const auto text = view.findChild<QPlainTextEdit*>("beaconBulletinText")->toPlainText();
+        QVERIFY(text.startsWith("Anfang\n")); QVERIFY(text.endsWith("Anzeige gekürzt")); QVERIFY(text.size() < 66000);
+        const auto tooltip = view.findChild<QPlainTextEdit*>("beaconBulletinText")->toolTip();
+        QVERIFY(tooltip.contains("&lt;img")); QVERIFY(!tooltip.contains("<img"));
     }
     void readingSelectionAndHorizontalPositionSurviveNewMessages() {
         BeaconView view; view.resize(700, 350); view.show();

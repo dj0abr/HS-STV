@@ -613,6 +613,32 @@ private slots:
         QVERIFY(window.findChild<QWidget*>("beaconPage")->isVisible());
         QVERIFY(!window.findChild<QPushButton*>("transmitButton")->isEnabled());
     }
+    void bulletinArrivesThroughAudioDecoderAndWorker() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state; CaptureState capture;
+        settings.setValue("modem/modulation", "mm-beacon");
+        MainWindow window(std::make_unique<FakeOutput>(state), settings, std::make_unique<FakeCapture>(capture)); window.show();
+        QTRY_VERIFY(capture.open);
+        QString fixture = QCoreApplication::applicationDirPath() + "/test_rx_fixture";
+#ifdef Q_OS_WIN
+        fixture += ".exe";
+#endif
+        QProcess source; source.start(fixture, {"400", "bulletin", "65", "mm-beacon"});
+        QVERIFY(source.waitForFinished(10000)); QCOMPARE(source.exitCode(), 0);
+        const auto audio = source.readAllStandardOutput(); QVERIFY(!audio.isEmpty()); std::array<float, 4800> samples{};
+        for (int at = 0; at < audio.size();) {
+            const int bytes = std::min(int(sizeof(samples)), int(audio.size()) - at);
+            std::memcpy(samples.data(), audio.constData() + at, std::size_t(bytes));
+            capture.consume(samples.data(), std::size_t(bytes) / sizeof(float)); at += bytes; QTest::qWait(3);
+        }
+        auto* text = window.findChild<QPlainTextEdit*>("beaconBulletinText");
+        QTRY_VERIFY_WITH_TIMEOUT(text->toPlainText().contains("Test-Bulletin"), 5000);
+        QVERIFY(text->toPlainText().contains(QStringLiteral("Grüße aus München & 73.")));
+        QVERIFY(!text->toPlainText().contains("evil"));
+        QTRY_VERIFY(window.findChild<QLabel*>("beaconBulletinStatus")->text().contains("vollständig"));
+        QCOMPARE(state.starts, 0u);
+        if (qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT"))
+            QVERIFY(window.grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + ".bulletin.png"));
+    }
     void setupRefreshKeepsSelectionAndPersistsChoice() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
         MainWindow window(std::make_unique<FakeOutput>(state), settings); window.show(); QVERIFY(window.loadImage(picture(dir)));

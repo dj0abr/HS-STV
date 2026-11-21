@@ -222,6 +222,8 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     receiver_.sstvReceived = [this](const SstvUpdate& update) { receivedSstv(update); };
     receiver_.imageReceived = [this](const ReceivedImage& image) { receivedImage(image); };
     receiver_.beaconMessageReceived = [this](const BeaconMessage& message) { beaconView_->appendMessage(message); };
+    receiver_.bulletinReceived = [this](const Bulletin& bulletin) { beaconView_->showBulletin(bulletin); };
+    receiver_.bulletinProgressChanged = [this](const BulletinProgress& progress) { beaconView_->showBulletinProgress(progress); };
     receiver_.statusChanged = [this](const ReceiveStatus& status) {
         monitor_->setStatus(status); syncDisplayRange(); showReceiveStatistics(status);
         QString details = status.state;

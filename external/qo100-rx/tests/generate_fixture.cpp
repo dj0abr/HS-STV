@@ -7,6 +7,9 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+#ifdef MM_SSTV_TEST_BULLETINS
+#include "bulletin_fixture.hpp"
+#endif
 #include "fec/schifra_galois_field.hpp"
 #include "fec/schifra_galois_field_polynomial.hpp"
 #include "fec/schifra_sequential_root_generator_polynomial_creator.hpp"
@@ -35,6 +38,9 @@ int main(int argc, char** argv) {
     auto interp=firinterp_crcf_create(k,h,2*k*15+1);
     double phase=argc > 5 ? atof(argv[5]) : 0, pilot_phase=0;
     uint64_t audio_samples = 0;
+#ifdef MM_SSTV_TEST_BULLETINS
+    const auto bulletins = mode == "bulletin" ? beacon_test::frames(beacon_test::zip(beacon_test::content())) : std::vector<mm_sstv::ReceivedFrame>{};
+#endif
     for(int frame=0;frame<frame_count;++frame) {
         uint8_t raw[223]={}; raw[0]=frame; raw[1]=8|0x30;
         raw[2]=2;
@@ -53,6 +59,13 @@ int main(int argc, char** argv) {
                 memcpy(raw + 4, text, strlen(text));
             }
         }
+#ifdef MM_SSTV_TEST_BULLETINS
+        if (!bulletins.empty()) {
+            const auto& file = bulletins[unsigned(frame) % bulletins.size()];
+            raw[0] = uint8_t(file.counter); raw[1] = uint8_t(((file.counter >> 8) << 6) | (file.status << 4) | file.type);
+            std::copy(file.payload.begin(), file.payload.end(), raw + 2);
+        }
+#endif
         uint16_t crc=Crc16_messagecalc(0,raw,221);
         raw[221]=crc>>8; raw[222]=crc;
         if(corrupt) raw[222]^=1; // Valid RS, deliberately invalid frame CRC.

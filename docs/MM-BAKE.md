@@ -42,7 +42,7 @@ weiterhin keinen automatischen Wechsel auf ein anderes Gerät.
 6. Zurück zu 8APSK/QPSK oder SSTV wechseln; Bildbedienung und Sendemöglichkeit
    müssen wieder vorhanden sein.
 
-Stufe 1 ist abgenommen; die folgende Stufe 2 ist jetzt zum Stationstest bereit.
+Stufe 1 ist abgenommen; der DX-Stationstest von Stufe 2 ist ebenfalls bestätigt.
 
 ### Automatische Prüfungen
 
@@ -61,7 +61,7 @@ ctest --test-dir build -R 'mm_beacon_phy|audio_system_defaults|gui_controls' --o
 Der PortAudio-Adapter unterstützt dieselbe Auswahl des Systemstandards und wird
 zusätzlich unter Linux kompiliert. Das ersetzt keine spätere Windows-Prüfung.
 
-## Stufe 2: CW-Skimmer und DX-Cluster (bereit zum Stationstest)
+## Stufe 2: CW-Skimmer und DX-Cluster (DX-Stationstest erfolgreich)
 
 Die CRC-geprüften Modemframes werden im Bakenmodus an den C++-Nachrichtensammler
 `BeaconMessages` übergeben. Frame-Typ 8, Untertyp 0 enthält DX-Cluster-Meldungen
@@ -78,7 +78,7 @@ Meldungen innerhalb von 120 Sekunden werden unterdrückt. Unbekannte Textformate
 bleiben als Klartext sichtbar. Beim Lesen älterer Zeilen oder Markieren von Text
 springt die Ansicht nicht bei jeder neuen Meldung nach unten. Die Texte bleiben
 beim Wechsel der Betriebsart im Fenster erhalten; sie werden noch nicht auf
-Datenträger archiviert. Der Bulletinbereich bleibt bis Stufe 3 leer.
+Datenträger archiviert. Der Bulletinbereich wird durch die folgende Stufe 3 ergänzt.
 
 ### Stationstest und Abnahmekriterien
 
@@ -96,7 +96,7 @@ Datenträger archiviert. Der Bulletinbereich bleibt bis Stufe 3 leer.
 6. In einer längeren Liste zurückscrollen und Text markieren: Neu empfangene
    Meldungen dürfen die Leseposition nicht zum Listenende versetzen.
 7. Zwischen Bildmodus und Bake wechseln. Die empfangenen Texte bleiben erhalten.
-   Bulletins werden in dieser Stufe noch nicht dekodiert.
+   In Stufe 3 werden dort zusätzlich die Bulletins dekodiert.
 
 `mm_beacon_messages` prüft die Parser, Zeichensätze, Duplikate und ungültige
 Frames. `mm_beacon_text_views` prüft Kanaltrennung, Klartextdarstellung,
@@ -108,20 +108,70 @@ Textfenster ein. Alle neuen Prüfungen sind C++ und benötigen kein echtes Audio
 ctest --test-dir build -R 'mm_beacon_|gui_controls' --output-on-failure
 ```
 
-Nach erfolgreichem Stationstest dieser Stufe folgt die Bulletin-Dekodierung.
+Der DX-Cluster-Empfang wurde im Stationstest bestätigt. CW-Skimmer war dabei
+mangels Aktivität nicht zu beobachten; der vollständige CW-Signalweg besteht
+den automatischen Test. Die Bulletin-Stufe ist jetzt zum Stationstest bereit.
 
-## Stufe 3: Bulletins
+## Stufe 3: Bulletins (bereit zum Stationstest)
 
-Die Bulletin-Protokolllogik aus
-`QO100_TRX2/external/mmdecoder/data_collector.py` nach C++ übertragen:
-Dateikopf, Blocknummern, Wiederholungen, Datei-CRC, ZIP-Prüfung und Klartext.
-Portable ZIP-Unterstützung im CMake-Build einbinden. Entpacken und Dateizugriffe
-außerhalb des GUI-Threads ausführen. Nur vollständig geprüfte Bulletins ersetzen
-das angezeigte Bulletin. HTML wird als Klartext dargestellt; Größenlimits und
-Prüfungen des bisherigen Decoders bleiben erhalten.
-Abnahme: vollständige und wiederholte Bulletins sowie fehlende/falsche Blöcke,
-ungültige ZIP-Dateien und Unicode. Ein unvollständiges Bulletin darf das letzte
-gültige Bulletin nicht ersetzen.
+Datei- und Bulletin-Protokoll sind aus QO100_TRX2 nach C++/Qt übertragen. Der
+Modemkern liefert CRC-geprüfte Frames. `BulletinReceiver` verarbeitet die
+Bulletin-Dateien in einem eigenen Worker-Thread, außerhalb von Audio und GUI.
+Er liest den 55-Byte-Dateikopf, sammelt nummerierte Blöcke der Dateitypen 3–5
+und ergänzt fehlende Teile aus Wiederholungen. Ein neuer Stream braucht wieder
+einen Dateikopf; bis zu 32 angefangene Bulletins bleiben während der Laufzeit
+im Speicher. Interleaved CW-/DX- und Spektrummeldungen unterbrechen das nicht.
+
+Erst nach vollständigem Empfang folgen Datei-CRC16, ZIP-Verzeichnisprüfung,
+Entpacken und ZIP-CRC32. Der begrenzte ZIP-Leser unterstützt Stored und Deflate,
+auch Daten-Deskriptoren mit und ohne Signatur sowie Unterverzeichnisse. Er liest
+genau eine `.blt`-Datei vollständig im Speicher; keine ZIP-Datei wird auf Platte
+extrahiert. Die neue Bibliotheksabhängigkeit ist **zlib**. Unter Debian/Ubuntu
+installiert `prepare.sh` dafür `zlib1g-dev`; CMake verwendet `ZLIB::ZLIB`, auch für
+einen späteren Windows-Build.
+
+UTF-8 und Windows-1252, Bulletin-Kategorie/Seitennummer/Titel sowie HTML-Klartext
+werden unterstützt. Script-/Style-Inhalte werden entfernt und HTML-Ressourcen
+nicht geladen. HTTP-/HTTPS-Linkziele bleiben im Klartext lesbar. Beim Eintreffen
+eines vollständig geprüften neuen Bulletins wird das rechte Textfenster von oben
+neu angezeigt. Duplikate versetzen die Leseposition nicht. Fortschritt oder
+Fehler stehen unter dem Bulletin; dabei bleibt der letzte gültige Text erhalten.
+
+Grenzen: höchstens 1024 Funkblöcke je komprimierter Datei, 4 MiB entpackter
+Inhalt und 65536 Zeichen in der Anzeige. Eine gekürzte Anzeige trägt einen Hinweis.
+Die Worker-Queue ist auf 512 Frames begrenzt und verwirft bei einem Neustart alte
+Ergebnisse. Es gibt weiterhin kein dauerhaftes Archiv und keine Fortsetzung
+unvollständiger Dateien nach einem Programmneustart; das gehört zur separat
+festzulegenden Speicherung in Stufe 4.
+
+### Stationstest und Abnahmekriterien
+
+1. HS-STV neu starten, **QO100 MM-Bake** und den bisherigen Audioeingang wählen.
+2. Bei **RX · Sync** auf ein Bulletin warten. Unter dem rechten Fenster erscheint
+   der Dateiname mit **empfangene/erwartete Blöcke**. Fehlt der Anfang, auf den
+   nächsten Dateikopf im Bakenzyklus warten.
+3. Nach vollständiger Prüfung muss der Bulletintext lesbar erscheinen und die
+   Statuszeile **Bulletin vollständig geprüft** melden.
+4. Umlaute, Zeilenumbrüche und Links kontrollieren. HTML-Tags oder Script-Inhalte
+   sollen nicht als ausgeführte Inhalte erscheinen.
+5. Während des nächsten Bulletin-Empfangs muss der vorige gültige Text erhalten
+   bleiben. Ein CRC-/ZIP-Fehler darf ihn nicht ersetzen. Bei einer Wiederholung
+   sollen fehlende Blöcke ergänzt werden.
+6. CW-/DX-Ausgabe, Synchronisation und Bedienung müssen währenddessen weiterlaufen.
+
+`mm_beacon_bulletins` prüft ZIP-Varianten und fehlerhafte Archive, Blockverluste,
+Wiederholungen, Datei-CRC-Reparatur, Metadaten, Zeichensätze, Klartext und die
+Zustellung vom Worker auf dem GUI-Thread. `mm_beacon_text_views` prüft das
+Beibehalten des letzten Bulletins bei Fehlern, Duplikate und Anzeigegrenzen.
+`gui_controls` erzeugt zusätzlich echte 7200-bit/s-Audiodaten einer Bulletin-Datei
+und prüft den kompletten Weg über den Empfangskern und Worker bis ins Textfenster.
+Alle neuen Prüfungen sind C++.
+
+```sh
+ctest --test-dir build -R 'mm_beacon_|gui_controls' --output-on-failure
+```
+
+Nach diesem Stationstest folgt der Abschluss einschließlich Python-freier Tests.
 
 ## Stufe 4: Abschluss und Python-freie Tests
 

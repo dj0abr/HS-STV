@@ -9,6 +9,8 @@
 #include <stdexcept>
 namespace mm_sstv {
 Receiver::Receiver(std::unique_ptr<AudioInput> input, QObject* parent) : QObject(parent), input_(std::move(input)) {
+    bulletins_.bulletinReceived = [this](const Bulletin& bulletin) { if (active_ && isBeacon(mode_) && bulletinReceived) bulletinReceived(bulletin); };
+    bulletins_.progressChanged = [this](const BulletinProgress& progress) { if (active_ && isBeacon(mode_) && bulletinProgressChanged) bulletinProgressChanged(progress); };
     connect(&core_, &QProcess::readyReadStandardOutput, this, [this] { readOutput(); });
     connect(&core_, &QProcess::readyReadStandardError, this, [this] { core_.readAllStandardError(); });
     connect(&core_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [this](int, QProcess::ExitStatus) {
@@ -43,6 +45,7 @@ void Receiver::start(const std::string& device, Modulation mode) {
     } catch (...) { stop(); throw; }
 }
 void Receiver::stop() {
+    bulletins_.resetStream();
     accepting_ = false; active_ = false; timer_.stop();
     if (input_) input_->stop();
     if (core_.state() != QProcess::NotRunning) {
@@ -144,6 +147,7 @@ void Receiver::readOutput() {
             ReceivedFrame frame; frame.type = json.value("frame_type").toInt(-1); frame.counter = json.value("frame_number").toInt(-1); frame.status = json.value("frame_info").toInt(-1);
             std::copy(payload.begin(), payload.end(), frame.payload.begin());
             if (isBeacon(mode_)) {
+                bulletins_.submit(frame);
                 if (const auto message = beaconMessages_.accept(frame); message && beaconMessageReceived) beaconMessageReceived(*message);
             } else if (const auto image = assembler_.accept(frame); image && imageReceived) imageReceived(*image);
         }

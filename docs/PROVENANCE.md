@@ -219,3 +219,16 @@ UTF-8/Windows-1252 und Duplikatfenster von 120 Sekunden. Keine Python-Laufzeit,
 Tkinter-, HTTP- oder SQLite-Schicht wird übernommen. Die Oberfläche verwendet
 Qt-Klartextfenster; Bulletin-Dateidekodierung ist noch nicht enthalten. Native
 Testframes prüfen den Signalweg vom 7200-bit/s-Empfang bis zur Textausgabe.
+
+## MM-Bake: native Bulletin-Dekodierung
+
+`src/receive/bulletin_receiver.cpp` überträgt Dateikopf, Blocksammlung, Datei-CRC,
+Metadaten und Duplikatregeln aus dem vorhandenen Python-Collector nach C++/Qt.
+`beacon_text.cpp` enthält den gemeinsamen UTF-8-/Windows-1252-Decoder. ZIP-Daten
+werden ausschließlich im Speicher gelesen; Deflate und CRC32 verwenden zlib.
+Der eingeschränkte ZIP-Leser in `bulletin_zip.cpp` folgt der
+[PKWARE APPNOTE](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT),
+Abschnitte 4.3.7/4.3.9/4.3.12/4.3.16, und verwendet die dokumentierten
+[zlib-Schnittstellen](https://zlib.net/manual.html). zlib bleibt eine externe
+Bibliothek, eingebunden über CMake `ZLIB::ZLIB`. Die ursprünglichen Python-,
+HTTP- und SQLite-Laufzeitkomponenten werden nicht eingebunden.

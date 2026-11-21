@@ -99,11 +99,14 @@ stellt die Audioadapter automatisch passend ein. Der 100-Hz-Referenzträger und
 100 % als digitale Vollaussteuerung bleiben erhalten.
 [Technik und Prüfungen von QPSK 4410](docs/QPSK4410.md).
 
-## QO100 MM-Bake – CW-Skimmer und DX-Cluster
+## QO100 MM-Bake – CW-Skimmer, DX-Cluster und Bulletins
 
 Die Auswahl **QO100 MM-Bake** ist ein reiner Empfangsmodus mit **8APSK ·
 7200 bit/s**. Links erscheinen **CW-Skimmer** und **DX-Cluster** in getrennten
-Textfenstern. Rechts ist der Bulletinbereich für die nächste Teststufe vorbereitet.
+Textfenstern. Rechts erscheinen vollständig geprüfte **Bulletins** als Klartext.
+Fehlende Bulletinblöcke werden aus Wiederholungen ergänzt. Fortschritt und
+CRC-/ZIP-Fehler stehen unter dem Bulletin; bis zum nächsten vollständigen Empfang
+bleibt der bisherige Text erhalten.
 Die Digitalanzeige zeigt weiterhin Pilot/AFC, Spektrum, Konstellation und gültige
 Frames. Gleiche Meldungen werden innerhalb von zwei Minuten unterdrückt; die
 Listen enthalten jeweils höchstens 1000 Einträge. Beim Zurückscrollen bleibt die
@@ -218,6 +221,8 @@ Mit `./prepare.sh --dry-run` lässt sich die Installation ohne Änderungen anhan
 der vorhandenen Paketlisten simulieren. `./prepare.sh --portaudio` installiert
 zusätzlich `portaudio19-dev` für einen Build mit
 `./build.sh -DMM_SSTV_AUDIO_BACKEND=portaudio -DPython3_EXECUTABLE=/usr/bin/python3`.
+
+Für die Bulletin-ZIP-Verarbeitung wird außerdem `zlib1g-dev` installiert.
 
 Enthalten sind insbesondere **glibc (`libc6`, `libc6-dev`)**, die C++-Laufzeit
 (`libstdc++6`), CMake, Compiler, Qt-5-Entwicklungsdateien samt Bildformat- und

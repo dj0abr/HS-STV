@@ -35,7 +35,7 @@ packages=(
     # C/C++-Laufzeit, insbesondere glibc (Debian-Paketname: libc6).
     libc6 libc6-dev libgcc-s1 libstdc++6
     # start.sh baut das Programm beim ersten Start automatisch.
-    build-essential cmake pkg-config
+    build-essential cmake pkg-config zlib1g-dev
     # Qt Widgets, Qt Test, Bildformate und Wayland-Unterstuetzung.
     qtbase5-dev qt5-image-formats-plugins qtwayland5
     fonts-dejavu-core xdg-utils
