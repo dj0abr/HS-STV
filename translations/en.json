@@ -241,5 +241,5 @@
   "Audio: Kontext konnte nicht angelegt werden": "Audio: cannot allocate context",
   "Waterfall-ID": "Waterfall ID",
   "%1\n%2\nEmpfangen: %3\nKlicken: vollständig lesen und gespeicherte Bulletins auswählen": "%1\n%2\nReceived: %3\nClick to read the full text and select saved bulletins",
-  "Bulletins – zum Vergrößern anklicken": "Bulletins – click to enlarge"
+  "Bulletins – zum Vergrößern anklicken ": "Bulletins – click to enlarge "
 }

@@ -46,7 +46,7 @@ BeaconView::BeaconView(QWidget* parent) : QWidget(parent) {
             "Gleiche Meldungen innerhalb von zwei Minuten werden ausgeblendet.\n"
             "Zum Lesen zurückscrollen; neue Meldungen versetzen die Ansicht dann nicht."));
     }
-    bulletin_ = addPane(columns, uiText("Bulletins – zum Vergrößern anklicken"), "beaconBulletinText");
+    bulletin_ = addPane(columns, uiText("Bulletins – zum Vergrößern anklicken "), "beaconBulletinText");
     bulletin_->parentWidget()->installEventFilter(this);
     updateBulletinWidth();
     bulletin_->setMaximumBlockCount(0);
