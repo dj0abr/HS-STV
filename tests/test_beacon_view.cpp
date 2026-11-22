@@ -3,8 +3,6 @@
 #include "language.hpp"
 #include <QGroupBox>
 #include <QSplitter>
-#include <QStyle>
-#include <QStyleOptionGroupBox>
 #include <QPlainTextEdit>
 #include <QLabel>
 #include <QScrollBar>
@@ -25,17 +23,20 @@ private slots:
         BeaconView view; view.resize(900, 350); view.show();
         auto* text = view.findChild<QPlainTextEdit*>("beaconBulletinText");
         auto* group = qobject_cast<QGroupBox*>(text->parentWidget()); QVERIFY(group);
+        auto* heading = view.findChild<QLabel*>("beaconBulletinHeading"); QVERIFY(heading);
+        QVERIFY(group->title().isEmpty());
         auto* columns = view.findChild<QSplitter*>("beaconColumns"); QVERIFY(columns);
         for (const auto& language : {QString("de"), QString("en")}) {
             Language::instance().setCode(language);
             for (int extra : {0, 5}) {
-                auto font = view.font(); font.setPointSize(9 + extra); group->setFont(font);
+                auto font = view.font(); font.setPointSize(9 + extra); heading->setFont(font);
                 columns->setSizes({10000, 1}); QCoreApplication::processEvents();
-                QStyleOptionGroupBox option; option.initFrom(group); option.text = group->title(); option.textAlignment = group->alignment();
-                const auto label = group->style()->subControlRect(QStyle::CC_GroupBox, &option, QStyle::SC_GroupBoxLabel, group);
-                const int ink = group->fontMetrics().boundingRect(group->title()).width();
-                QVERIFY(label.left() >= 0); QVERIFY(label.width() >= ink);
-                QVERIFY(group->width() >= label.left() + ink + 16);
+                const int ink = heading->fontMetrics().boundingRect(heading->text()).width();
+                QVERIFY(heading->isVisible()); QVERIFY(heading->contentsRect().width() >= ink + 8);
+                const QRect headingArea(heading->mapTo(&view, QPoint()), heading->size());
+                const QRect frameArea(group->mapTo(&view, QPoint()), group->size());
+                QVERIFY(!headingArea.intersects(frameArea));
+                QCOMPARE(heading->text(), uiText("Bulletins – zum Vergrößern anklicken"));
             }
         }
         Language::instance().setCode("de");

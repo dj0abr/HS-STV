@@ -23,6 +23,7 @@ private:
     QPlainTextEdit* dx_ = nullptr;
     QPlainTextEdit* bulletin_ = nullptr;
     QLabel* bulletinStatus_ = nullptr;
+    QLabel* bulletinHeading_ = nullptr;
     QByteArray bulletinDigest_;
     QString bulletinFilename_;
     std::optional<Bulletin> currentBulletin_;

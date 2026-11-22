@@ -105,8 +105,10 @@ private slots:
         QTest::mouseClick(text->viewport(), Qt::LeftButton); QCOMPARE(requested, 1u);
         QTest::mouseClick(text->viewport(), Qt::RightButton); QCOMPARE(requested, 1u);
         QTest::keyClick(text, Qt::Key_Return); QCOMPARE(requested, 2u);
+        auto* heading = view.findChild<QLabel*>("beaconBulletinHeading"); QVERIFY(heading);
+        QTest::mouseClick(heading, Qt::LeftButton); QCOMPARE(requested, 3u);
         QTest::mousePress(text->viewport(), Qt::LeftButton, Qt::NoModifier, QPoint(5, 5));
-        QTest::mouseRelease(text->viewport(), Qt::LeftButton, Qt::NoModifier, QPoint(80, 25)); QCOMPARE(requested, 2u);
+        QTest::mouseRelease(text->viewport(), Qt::LeftButton, Qt::NoModifier, QPoint(80, 25)); QCOMPARE(requested, 3u);
     }
 };
 QTEST_MAIN(BulletinArchiveTest)

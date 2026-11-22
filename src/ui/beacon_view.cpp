@@ -27,8 +27,21 @@ BeaconView::BeaconView(QWidget* parent) : QWidget(parent) {
     columns->setChildrenCollapsible(false);
     auto* spots = new QSplitter(Qt::Vertical, columns); spots->setObjectName("beaconSpots");
     spots->setChildrenCollapsible(false);
-    const auto addPane = [](QSplitter* splitter, const QString& title, const QString& name) {
-        auto* group = new QGroupBox(title, splitter); auto* column = new QVBoxLayout(group);
+    const auto addPane = [](QSplitter* splitter, const QString& title, const QString& name, QLabel** heading = nullptr) {
+        QWidget* pane = nullptr; QGroupBox* group = nullptr;
+        if (heading) {
+            // Native group-box styles may clip their caption independently of
+            // the panel width. Keep this heading outside the frame's painter.
+            pane = new QWidget(splitter); auto* rows = new QVBoxLayout(pane);
+            rows->setContentsMargins(0, 0, 0, 0); rows->setSpacing(2);
+            *heading = new QLabel(title, pane); (*heading)->setObjectName("beaconBulletinHeading");
+            (*heading)->setTextFormat(Qt::PlainText); (*heading)->setContentsMargins(6, 0, 16, 0);
+            (*heading)->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+            rows->addWidget(*heading); group = new QGroupBox(pane); rows->addWidget(group, 1);
+        } else {
+            group = new QGroupBox(title, splitter); pane = group;
+        }
+        auto* column = new QVBoxLayout(group);
         column->setContentsMargins(6, 6, 6, 6);
         auto* view = new QPlainTextEdit(group); view->setObjectName(name);
         view->setReadOnly(true); view->setUndoRedoEnabled(false);
@@ -36,7 +49,7 @@ BeaconView::BeaconView(QWidget* parent) : QWidget(parent) {
         view->setFont(font);
         view->setLineWrapMode(QPlainTextEdit::NoWrap); view->setMinimumSize(0, 40);
         view->setMaximumBlockCount(maximumMessages);
-        column->addWidget(view); splitter->addWidget(group); return view;
+        column->addWidget(view); splitter->addWidget(pane); return view;
     };
     cw_ = addPane(spots, "CW-Skimmer", "beaconCwText");
     dx_ = addPane(spots, "DX-Cluster", "beaconDxText");
@@ -46,8 +59,8 @@ BeaconView::BeaconView(QWidget* parent) : QWidget(parent) {
             "Gleiche Meldungen innerhalb von zwei Minuten werden ausgeblendet.\n"
             "Zum Lesen zurückscrollen; neue Meldungen versetzen die Ansicht dann nicht."));
     }
-    bulletin_ = addPane(columns, uiText("Bulletins – zum Vergrößern anklicken "), "beaconBulletinText");
-    bulletin_->parentWidget()->installEventFilter(this);
+    bulletin_ = addPane(columns, uiText("Bulletins – zum Vergrößern anklicken"), "beaconBulletinText", &bulletinHeading_);
+    bulletinHeading_->installEventFilter(this); bulletinHeading_->setCursor(Qt::PointingHandCursor);
     updateBulletinWidth();
     bulletin_->setMaximumBlockCount(0);
     bulletin_->setLineWrapMode(QPlainTextEdit::WidgetWidth);
@@ -81,13 +94,11 @@ BeaconView::BeaconView(QWidget* parent) : QWidget(parent) {
     columns->setSizes({550, 350}); spots->setSizes({180, 180}); layout->addWidget(columns);
 }
 void BeaconView::updateBulletinWidth() {
-    auto* group = qobject_cast<QGroupBox*>(bulletin_->parentWidget());
-    if (!group) return;
-    const auto metrics = group->fontMetrics();
-    const int titleWidth = std::max(metrics.horizontalAdvance(group->title()), metrics.boundingRect(group->title()).width());
-    // Leave room for both frame margins and the final glyph with any Qt style.
-    // The splitter must not shrink the panel until its heading is clipped.
-    group->setMinimumWidth(titleWidth + 40);
+    if (!bulletinHeading_) return;
+    const auto metrics = bulletinHeading_->fontMetrics();
+    const auto title = bulletinHeading_->text();
+    const int titleWidth = std::max(metrics.horizontalAdvance(title), metrics.boundingRect(title).width());
+    bulletinHeading_->parentWidget()->setMinimumWidth(titleWidth + 40);
 }
 void BeaconView::appendMessage(const BeaconMessage& message) {
     auto* view = message.channel == BeaconChannel::CwSkimmer ? cw_ : dx_;
@@ -124,9 +135,9 @@ void BeaconView::showBulletinProgress(const BulletinProgress& progress) {
     bulletinStatus_->setToolTip(plainToolTip(text));
 }
 bool BeaconView::eventFilter(QObject* watched, QEvent* event) {
-    if (watched == bulletin_->parentWidget() && (event->type() == QEvent::FontChange || event->type() == QEvent::ApplicationFontChange ||
+    if (watched == bulletinHeading_ && (event->type() == QEvent::FontChange || event->type() == QEvent::ApplicationFontChange ||
         event->type() == QEvent::StyleChange || event->type() == QEvent::Polish)) updateBulletinWidth();
-    if (watched == bulletin_->viewport()) {
+    if (watched == bulletin_->viewport() || watched == bulletinHeading_) {
         if (event->type() == QEvent::MouseButtonPress) {
             const auto* mouse = static_cast<QMouseEvent*>(event);
             bulletinPressed_ = mouse->button() == Qt::LeftButton; bulletinPress_ = mouse->pos();
