@@ -245,6 +245,14 @@ private slots:
         QVERIFY(!window.findChild<QLabel*>("receiveStatistics")->text().contains("korr."));
         QVERIFY(help->findChild<QTextBrowser*>("aboutDetails")->toPlainText().contains("Libraries used"));
         QVERIFY(!help->findChild<QTextBrowser*>("aboutDetails")->toPlainText().contains("Verwendete Bibliotheken"));
+        const auto englishHelp = help->findChild<QTextBrowser*>("aboutDetails")->toPlainText();
+        QVERIFY(englishHelp.contains("Adapted decoders and algorithm references"));
+        QVERIFY(englishHelp.contains("Daniel Estévez (gr-satellites) and Phil Karn (libfec)"));
+        QVERIFY(englishHelp.contains("This list covers directly linked libraries and adapted decoders."));
+        QVERIFY(englishHelp.contains("Image format plugins and other system dependencies are provided by Qt or the operating system."));
+        QVERIFY(englishHelp.contains("The license and copyright notices of the respective components remain applicable."));
+        QVERIFY(!englishHelp.contains(" und ")); QVERIFY(!englishHelp.contains("Die Liste"));
+
         QCOMPARE(help->findChild<QPushButton*>("aboutCloseButton")->text(), QString("Close"));
         QCOMPARE(editor->findChild<QLineEdit*>("overlayOwnCall")->text(), QString("Bild"));
         QCOMPARE(editor->findChild<QLineEdit*>("overlayFreeText1")->text(), QString("Empfang"));
@@ -267,6 +275,9 @@ private slots:
         MainWindow restored(std::make_unique<FakeOutput>(state), reopened);
         QVERIFY(restored.findChild<QAction*>("languageEnglish")->isChecked());
         QCOMPARE(restored.findChild<QPushButton*>("transmitButton")->text(), QString("Transmit"));
+        restored.findChild<QAction*>("helpAbout")->trigger();
+        const auto restoredHelp = restored.findChild<QTextBrowser*>("aboutDetails")->toPlainText();
+        QCOMPARE(restoredHelp, englishHelp);
         QCOMPARE(reopened.value("overlay/text0").toString(), QString("Bild"));
         QCOMPARE(capture->starts.load(), starts); QCOMPARE(state.starts, 0u);
     }
