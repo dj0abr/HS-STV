@@ -207,7 +207,7 @@ private slots:
     void openReceiveFolderUsesDesktopServices() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
         MainWindow window(std::make_unique<FakeOutput>(state), settings);
-        QVERIFY(window.windowTitle().startsWith("HS-STV")); QVERIFY(!window.findChild<QAction*>("saveReceived"));
+        QCOMPARE(window.windowTitle(), QStringLiteral("HS_STV - QO100 Bildübertragung und Bakenmonitor")); QVERIFY(!window.findChild<QAction*>("saveReceived"));
         auto* action = window.findChild<QAction*>("openReceiveFolder"); QVERIFY(action); QVERIFY(action->isEnabled());
         QCOMPARE(action->text(), QString("Empfangsordner öffnen"));
         QDesktopServices::setUrlHandler("file", this, "captureFolderUrl"); action->trigger();

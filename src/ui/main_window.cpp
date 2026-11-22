@@ -73,7 +73,7 @@ private:
 }
 MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings, std::unique_ptr<AudioInput> input)
     : transmitter_(std::move(output)), settings_(settings), receiver_(std::move(input)) {
-    setWindowTitle("HS-STV · Bilder senden und empfangen"); setMinimumSize(640, 440);
+    setWindowTitle("HS_STV - QO100 Bildübertragung und Bakenmonitor"); setMinimumSize(640, 440);
     const auto savedMode = settings_.value("modem/modulation", "8apsk").toString();
     for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410, Modulation::Martin1, Modulation::Martin2, Modulation::Scottie1, Modulation::Scottie2, Modulation::MmBeacon, Modulation::PskBeacon})
         if (savedMode == modeKey(mode)) mode_ = mode;
