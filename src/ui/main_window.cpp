@@ -259,7 +259,11 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
         const int before = pskText_->document()->isEmpty() ? 0 : pskText_->document()->blockCount();
         pskText_->appendPlainText(text.trimmed());
         if (follow) scroll->setValue(scroll->maximum());
-        else scroll->setValue(std::max(0, oldPosition - std::max(0, before + text.trimmed().count('\n') + 1 - pskText_->document()->blockCount())));
+        else {
+            const int addedBlocks = int(text.trimmed().count('\n')) + 1;
+            const int removedBlocks = std::max(0, before + addedBlocks - pskText_->document()->blockCount());
+            scroll->setValue(std::max(0, oldPosition - removedBlocks));
+        }
         pskText_->horizontalScrollBar()->setValue(horizontal);
     };
     receiver_.beaconMessageReceived = [this](const BeaconMessage& message) { beaconView_->appendMessage(message); };

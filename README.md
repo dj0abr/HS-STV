@@ -310,17 +310,44 @@ Die Senderimplementierung bindet keine Schifra-Bibliothek ein; der übernommene
 Empfangskern verwendet den originalen Schifra-Decoder. Bild- und Testdaten
 laufen durch denselben Modulationskern mit den Parametern des gewählten Modus.
 
-Die PortAudio-Adapter wurden einschließlich Bildsender und Aufnahme unter Linux kompiliert.
-Windows/macOS selbst sind noch nicht getestet. Dort sind passende Qt-,
-liquid-dsp-1.8.3- und PortAudio-Builds erforderlich. Beispiel:
+### Windows 11 (x64)
 
-```text
-cmake -S . -B build -DMM_SSTV_AUDIO_BACKEND=portaudio -DMM_SSTV_LIQUID_ROOT=C:/deps/liquid-1.8.3 -DMM_LIQUID_LIBRARY=C:/deps/liquid-1.8.3/lib/liquid.lib -DCMAKE_PREFIX_PATH=C:/deps
-cmake --build build --config Release
+Im [MSYS2-UCRT64-Terminal](https://www.msys2.org/docs/environments/) die
+Entwicklungs- und Testpakete installieren. Falls MSYS2 nach dem Update ein
+neues Terminal verlangt, UCRT64 erneut öffnen und `pacman -Syu` wiederholen.
+
+```bash
+pacman -Syu
+pacman -S --needed git mingw-w64-ucrt-x86_64-{gcc,cmake,ninja,qt6-base,portaudio,zlib,python-numpy,pkgconf}
 ```
 
-PortAudio wird über ein CMake-Paket, pkg-config oder `MM_PORTAUDIO_INCLUDE` und
-`MM_PORTAUDIO_LIBRARY` eingebunden. Benötigte DLLs müssen auffindbar sein.
+Im Projektverzeichnis ausführen:
+
+```bash
+bash build-windows.sh
+ctest --test-dir build-windows --output-on-failure
+bash package-windows.sh
+```
+
+Der erste Build bezieht liquid-dsp 1.8.3 von GitHub und baut es mit einer
+Windows-Anpassung für den Prozesszeitmesser. Alle Build-Dateien liegen in
+`build-windows`. Das Paket enthält `bin/hs-stv.exe`, die Empfangsprogramme
+und die Laufzeitdateien. Zum Start im entpackten, beschreibbaren Paketordner
+`bin/hs-stv.exe` öffnen. Bei einem Start aus der Kommandozeile bestimmt das
+aktuelle Verzeichnis den Ablageort für `rxpic` und `bulletins`.
+
+Ein- und Ausgang des Funkgeräts ausdrücklich in der Audio-Geräteauswahl
+wählen. Für den geprüften **USB Audio CODEC** funktioniert der Eintrag
+mit Präfix **MME** in beiden Richtungen mit 44,1 und 48 kHz. Der WASAPI-Eintrag
+dieses Codecs hat 44,1 kHz in der geprüften Gerätekonfiguration abgelehnt.
+`hs-stv.exe --list-inputs` und `hs-stv.exe --list-audio` zeigen die
+Eingänge beziehungsweise Ausgänge.
+
+Unter Linux gelten weiterhin die oben beschriebenen Schritte mit PulseAudio
+bzw. PipeWire-Pulse. Für einen eigenen PortAudio-Build außerhalb von UCRT64
+kann CMake PortAudio über ein Paket, pkg-config oder `MM_PORTAUDIO_INCLUDE`
+und `MM_PORTAUDIO_LIBRARY` einbinden. `MM_SSTV_LIQUID_ROOT` verweist auf
+die passende liquid-dsp-Installation. macOS ist bislang ungetestet.
 
 [Empfang und Prüfergebnisse](docs/EMPFANG.md) ·
 [Prüfergebnisse Bildversand](docs/BILDVERSAND.md) ·
