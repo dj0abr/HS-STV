@@ -47,6 +47,8 @@ BeaconView::BeaconView(QWidget* parent) : QWidget(parent) {
             "Zum Lesen zurückscrollen; neue Meldungen versetzen die Ansicht dann nicht."));
     }
     bulletin_ = addPane(columns, uiText("Bulletins – zum Vergrößern anklicken"), "beaconBulletinText");
+    bulletin_->parentWidget()->installEventFilter(this);
+    updateBulletinWidth();
     bulletin_->setMaximumBlockCount(0);
     bulletin_->setLineWrapMode(QPlainTextEdit::WidgetWidth);
     bulletin_->setPlaceholderText(uiText("Warte auf ein vollständiges Bulletin…"));
@@ -62,6 +64,7 @@ BeaconView::BeaconView(QWidget* parent) : QWidget(parent) {
     bulletin_->parentWidget()->layout()->addWidget(bulletinStatus_);
     connect(&Language::instance(), &Language::changed, this, [this] {
         retranslateUi(this);
+        updateBulletinWidth();
         if (currentBulletin_) {
             bulletin_->setToolTip(plainToolTip(uiText("%1\n%2\nEmpfangen: %3\nKlicken: vollständig lesen und gespeicherte Bulletins auswählen")
                 .arg(currentBulletin_->filename, currentBulletin_->title, currentBulletin_->receivedAt.toUTC().toString(Qt::ISODate))));
@@ -76,6 +79,15 @@ BeaconView::BeaconView(QWidget* parent) : QWidget(parent) {
         }
     });
     columns->setSizes({550, 350}); spots->setSizes({180, 180}); layout->addWidget(columns);
+}
+void BeaconView::updateBulletinWidth() {
+    auto* group = qobject_cast<QGroupBox*>(bulletin_->parentWidget());
+    if (!group) return;
+    const auto metrics = group->fontMetrics();
+    const int titleWidth = std::max(metrics.horizontalAdvance(group->title()), metrics.boundingRect(group->title()).width());
+    // Leave room for both frame margins and the final glyph with any Qt style.
+    // The splitter must not shrink the panel until its heading is clipped.
+    group->setMinimumWidth(titleWidth + 40);
 }
 void BeaconView::appendMessage(const BeaconMessage& message) {
     auto* view = message.channel == BeaconChannel::CwSkimmer ? cw_ : dx_;
@@ -112,6 +124,8 @@ void BeaconView::showBulletinProgress(const BulletinProgress& progress) {
     bulletinStatus_->setToolTip(plainToolTip(text));
 }
 bool BeaconView::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == bulletin_->parentWidget() && (event->type() == QEvent::FontChange || event->type() == QEvent::ApplicationFontChange ||
+        event->type() == QEvent::StyleChange || event->type() == QEvent::Polish)) updateBulletinWidth();
     if (watched == bulletin_->viewport()) {
         if (event->type() == QEvent::MouseButtonPress) {
             const auto* mouse = static_cast<QMouseEvent*>(event);

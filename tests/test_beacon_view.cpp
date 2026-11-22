@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "beacon_view.hpp"
+#include "language.hpp"
+#include <QGroupBox>
+#include <QSplitter>
+#include <QStyle>
+#include <QStyleOptionGroupBox>
 #include <QPlainTextEdit>
 #include <QLabel>
 #include <QScrollBar>
@@ -16,6 +21,25 @@ class BeaconViewTest final : public QObject {
         return result;
     }
 private slots:
+    void bulletinHeadingHasRoomInBothLanguages() {
+        BeaconView view; view.resize(900, 350); view.show();
+        auto* text = view.findChild<QPlainTextEdit*>("beaconBulletinText");
+        auto* group = qobject_cast<QGroupBox*>(text->parentWidget()); QVERIFY(group);
+        auto* columns = view.findChild<QSplitter*>("beaconColumns"); QVERIFY(columns);
+        for (const auto& language : {QString("de"), QString("en")}) {
+            Language::instance().setCode(language);
+            for (int extra : {0, 5}) {
+                auto font = view.font(); font.setPointSize(9 + extra); group->setFont(font);
+                columns->setSizes({10000, 1}); QCoreApplication::processEvents();
+                QStyleOptionGroupBox option; option.initFrom(group); option.text = group->title(); option.textAlignment = group->alignment();
+                const auto label = group->style()->subControlRect(QStyle::CC_GroupBox, &option, QStyle::SC_GroupBoxLabel, group);
+                const int ink = group->fontMetrics().boundingRect(group->title()).width();
+                QVERIFY(label.left() >= 0); QVERIFY(label.width() >= ink);
+                QVERIFY(group->width() >= label.left() + ink + 16);
+            }
+        }
+        Language::instance().setCode("de");
+    }
     void channelsAreSeparateAndTextIsPlain() {
         BeaconView view; view.resize(900, 350); view.show();
         auto cw = message(1); cw.text = "<b>DL1TEST & CQ</b>"; view.appendMessage(cw);

@@ -18,6 +18,7 @@ public:
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 private:
+    void updateBulletinWidth();
     QPlainTextEdit* cw_ = nullptr;
     QPlainTextEdit* dx_ = nullptr;
     QPlainTextEdit* bulletin_ = nullptr;
