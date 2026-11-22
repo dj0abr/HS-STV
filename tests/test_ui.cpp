@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "main_window.hpp"
+#include "theme.hpp"
 #include "language.hpp"
 #include "bulletin_dialog.hpp"
 #include "image_panel.hpp"
@@ -133,6 +134,7 @@ class UiTest : public QObject {
 public slots:
     void captureFolderUrl(const QUrl& url) { openedFolder_ = url; }
 private slots:
+    void initTestCase() { applyDarkTheme(*qApp); }
     void init() {
         Language::instance().setCode("de");
         originalDirectory_ = QDir::currentPath(); receiveRoot_ = std::make_unique<QTemporaryDir>();

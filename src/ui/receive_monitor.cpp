@@ -5,13 +5,14 @@
 #include "mm_sstv/audio_spectrum.hpp"
 #include <QFontDatabase>
 #include <QPainter>
+#include <QPainterPath>
 #include <QImage>
 #include <QPolygonF>
 #include <algorithm>
 #include <cmath>
 namespace mm_sstv {
 namespace {
-const QColor background("#09141c"), grid("#243b48"), label("#97b0bf"), trace("#69d4e9"), pilot("#70efb5"), band("#e6bd6a");
+const QColor background("#0d141d"), grid("#2a3c4d"), label("#9db3c8"), trace("#69d4e9"), pilot("#70efb5"), band("#e6bd6a");
 // Explicit display limits keep low-frequency filter rolloff from affecting the scale.
 constexpr double maxHz = 4000;
 }
@@ -72,7 +73,11 @@ void ReceiveMonitor::setStatus(const ReceiveStatus& status) {
     update();
 }
 void ReceiveMonitor::paintEvent(QPaintEvent*) {
-    QPainter p(this); p.fillRect(rect(), background);
+    QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
+    const auto frame = QRectF(rect()).adjusted(.5, .5, -.5, -.5);
+    p.setPen(QColor("#2d3f52")); p.setBrush(background); p.drawRoundedRect(frame, 7, 7);
+    QPainterPath clip; clip.addRoundedRect(frame, 7, 7); p.setClipPath(clip);
+    p.setRenderHint(QPainter::Antialiasing, false); p.setBrush(Qt::NoBrush);
     auto font = QFontDatabase::systemFont(QFontDatabase::FixedFont); font.setPointSize(8); p.setFont(font);
     const bool analog = isSstv(status_.modulation);
     const double minDb = minDb_, maxDb = maxDb_;

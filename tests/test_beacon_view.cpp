@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "beacon_view.hpp"
 #include "language.hpp"
+#include "theme.hpp"
+#include <QApplication>
 #include <QGroupBox>
 #include <QSplitter>
 #include <QPlainTextEdit>
@@ -19,6 +21,7 @@ class BeaconViewTest final : public QObject {
         return result;
     }
 private slots:
+    void initTestCase() { applyDarkTheme(*qApp); }
     void bulletinHeadingHasRoomInBothLanguages() {
         BeaconView view; view.resize(900, 350); view.show();
         auto* text = view.findChild<QPlainTextEdit*>("beaconBulletinText");

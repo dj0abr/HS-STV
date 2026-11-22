@@ -22,6 +22,7 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QGridLayout>
 #include <QGuiApplication>
@@ -111,25 +112,38 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     help->setShortcut(QKeySequence::HelpContents); help->setToolTip(uiText("Über HS_STV · Version, Bibliotheken und Lizenzen"));
     connect(help, &QAction::triggered, this, [this] { showHelp(); });
     auto* central = new QWidget(this); auto* layout = new QVBoxLayout(central);
-    layout->setContentsMargins(6, 6, 6, 6); layout->setSpacing(6);
+    layout->setContentsMargins(10, 10, 10, 10); layout->setSpacing(8);
     contentPages_ = new QStackedWidget(central);
     auto* imagePage = new QWidget(contentPages_);
-    auto* panes = new QGridLayout(imagePage); panes->setContentsMargins(0, 0, 0, 0); panes->setHorizontalSpacing(6); panes->setVerticalSpacing(4);
-    panes->setColumnStretch(0, 1); panes->setColumnStretch(1, 1); panes->setRowStretch(1, 1);
-    auto* sendHeader = new QHBoxLayout; sendHeader->setSpacing(4);
+    auto* panes = new QGridLayout(imagePage); panes->setContentsMargins(0, 0, 0, 0); panes->setHorizontalSpacing(10);
+    panes->setColumnStretch(0, 1); panes->setColumnStretch(1, 1); panes->setRowStretch(0, 1);
+    struct ImageCard { QHBoxLayout* header; QVBoxLayout* body; };
+    const auto addImageCard = [&](int column, const char* name) {
+        auto* card = new QFrame(imagePage); card->setObjectName(name); card->setProperty("panel", true);
+        auto* rows = new QVBoxLayout(card); rows->setContentsMargins(0, 0, 0, 0); rows->setSpacing(0);
+        auto* heading = new QFrame(card); heading->setProperty("panelHeader", true);
+        heading->setMinimumHeight(40);
+        auto* header = new QHBoxLayout(heading); header->setContentsMargins(8, 6, 8, 6); header->setSpacing(4);
+        auto* content = new QWidget(card); auto* body = new QVBoxLayout(content);
+        body->setContentsMargins(8, 8, 8, 8); body->setSpacing(6);
+        rows->addWidget(heading); rows->addWidget(content, 1); panes->addWidget(card, 0, column);
+        return ImageCard{header, body};
+    };
+    const auto txCard = addImageCard(0, "transmitCard"), rxCard = addImageCard(1, "receiveCard");
+    auto* sendHeader = txCard.header;
     overlayEdit_ = new QPushButton("Text…", central); overlayEdit_->setObjectName("overlayEditButton");
-    overlayEdit_->setFixedWidth(overlayEdit_->fontMetrics().horizontalAdvance("Text…") + 18);
     overlayEdit_->setToolTip(uiText("Sendebild: Rufzeichen und Freitexte bearbeiten"));
     connect(overlayEdit_, &QPushButton::clicked, this, [this] { editTextOverlay(); });
     auto titleFont = overlayEdit_->font(); titleFont.setBold(true); sendHeader->addWidget(overlayEdit_);
     overlaySlots_ = new QComboBox(central); overlaySlots_->setObjectName("overlayTextSlot"); overlaySlots_->setAccessibleName(uiText("Freitext auswählen"));
-    overlaySlots_->addItems({"1", "2", "3", "4", "5"}); overlaySlots_->setFixedWidth(42); sendHeader->addWidget(overlaySlots_);
+    overlaySlots_->addItems({"1", "2", "3", "4", "5"}); overlaySlots_->setSizeAdjustPolicy(QComboBox::AdjustToContents); sendHeader->addWidget(overlaySlots_);
     refreshOverlayChoice();
     connect(overlaySlots_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
         if (transmitter_.running()) { refreshOverlayChoice(); return; }
         overlay_.selected = std::clamp(index, 0, 4); saveTextOverlay(settings_, overlay_); refreshOverlayChoice(); prepare();
     });
     sizes_ = new QComboBox(central); sizes_->setObjectName("imageSize"); sizes_->setToolTip(uiText("Bildgröße der übertragenen JPEG-Datei; die Vorschau passt sich dem Fenster an."));
+    sizes_->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     sendHeader->addWidget(sizes_);
     connect(sizes_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
         if (!isSstv(mode_)) settings_.setValue("image/sizeIndex", index);
@@ -137,11 +151,10 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     });
     start_ = new QPushButton(uiText("Senden"), central); start_->setObjectName("transmitButton"); start_->setMinimumWidth(80);
     auto buttonFont = start_->font(); buttonFont.setBold(true); start_->setFont(buttonFont); sendHeader->addWidget(start_); sendHeader->addStretch();
-    panes->addLayout(sendHeader, 0, 0);
-    auto* receiveHeader = new QHBoxLayout; receiveHeader->setSpacing(6);
+    auto* receiveHeader = rxCard.header; receiveHeader->setSpacing(6);
     auto* receiveTitle = new QLabel(uiText("Empfang"), central); receiveTitle->setFont(titleFont); receiveHeader->addWidget(receiveTitle);
     receiveStatus_ = new CompactLabel(central, Qt::ElideRight); receiveStatus_->setText(receiver_.available() ? uiText("Empfang startet…") : uiText("Kein Audioeingang")); receiveStatus_->setObjectName("receiveStatus");
-    receiveHeader->addWidget(receiveStatus_, 1); panes->addLayout(receiveHeader, 0, 1);
+    receiveHeader->addWidget(receiveStatus_, 1);
     preview_ = new ImagePanel(central); preview_->setObjectName("imagePreview");
     preview_->clicked = [this] { chooseImage(); };
     preview_->dropped = [this](const QString& path) { loadImage(path); };
@@ -157,39 +170,45 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     auto* percent = new QLabel(QString::number(level_) + " %", levelControl); percent->setObjectName("outputLevelValue"); percent->setAlignment(Qt::AlignCenter);
     levelControl->setFixedWidth(std::max(percent->fontMetrics().horizontalAdvance("100 %"), levelTitle->sizeHint().width()) + 6);
     levelColumn->addWidget(levelTitle); levelColumn->addWidget(slider, 1, Qt::AlignHCenter); levelColumn->addWidget(percent);
-    txPane->addWidget(levelControl); panes->addLayout(txPane, 1, 0); panes->addWidget(receivePreview_, 1, 1);
+    txPane->addWidget(levelControl); txCard.body->addLayout(txPane, 1); rxCard.body->addWidget(receivePreview_, 1);
     connect(slider, &QSlider::valueChanged, this, [this, percent](int value) {
         level_ = static_cast<unsigned>(value); transmitter_.setLevel(level_);
         percent->setText(QString::number(value) + " %"); settings_.setValue("audio/level", value);
         if (!transmitter_.running()) showReady();
     });
-    imageInfo_ = new CompactLabel(central); imageInfo_->setObjectName("imageInfo"); panes->addWidget(imageInfo_, 2, 0);
-    receiveInfo_ = new CompactLabel(central); receiveInfo_->setObjectName("receiveInfo"); panes->addWidget(receiveInfo_, 2, 1);
+    imageInfo_ = new CompactLabel(central); imageInfo_->setObjectName("imageInfo"); txCard.body->addWidget(imageInfo_);
+    status_ = new CompactLabel(central, Qt::ElideRight); status_->setObjectName("statusText");
+    auto statusFont = status_->font(); statusFont.setPointSizeF(9); status_->setFont(statusFont);
+    txCard.body->addWidget(status_);
+    receiveInfo_ = new CompactLabel(central); receiveInfo_->setObjectName("receiveInfo"); rxCard.body->addWidget(receiveInfo_);
     progress_ = new QProgressBar(central); progress_->setObjectName("sendProgress"); progress_->setValue(0); progress_->setFormat("TX %p%");
     receiveProgress_ = new QProgressBar(central); receiveProgress_->setObjectName("receiveProgress"); receiveProgress_->setValue(0); receiveProgress_->setFormat("RX %p%");
-    const auto styleProgress = [](QProgressBar* bar, const QString& color) {
+    const auto setupProgress = [](QProgressBar* bar) {
         auto font = bar->font(); font.setPointSizeF(8); bar->setFont(font);
-        bar->setFixedHeight(std::max(14, bar->fontMetrics().height() + 2));
-        bar->setStyleSheet(QString("QProgressBar { border: 1px solid #b6c0c8; border-radius: 3px; background: #eef1f4; color: #172331; text-align: center; padding: 0px; } QProgressBar::chunk { background: %1; border-radius: 2px; }").arg(color));
+        bar->setFixedHeight(std::max(18, bar->fontMetrics().height() + 4));
     };
-    styleProgress(progress_, "#e76969"); styleProgress(receiveProgress_, "#5ab875");
-    panes->addWidget(progress_, 3, 0); panes->addWidget(receiveProgress_, 3, 1);
+    setupProgress(progress_); setupProgress(receiveProgress_);
+    txCard.body->addWidget(progress_); rxCard.body->addWidget(receiveProgress_);
     contentPages_->addWidget(imagePage);
     beaconView_ = new BeaconView(contentPages_);
     contentPages_->addWidget(beaconView_);
-    auto* pskPage = new QGroupBox(uiText("PSB-Bake · dekodierter Text"), contentPages_); pskPage->setObjectName("pskBeaconPage");
-    auto* pskLayout = new QVBoxLayout(pskPage);
+    auto* pskPage = new QFrame(contentPages_); pskPage->setObjectName("pskBeaconPage"); pskPage->setProperty("panel", true);
+    auto* pskLayout = new QVBoxLayout(pskPage); pskLayout->setContentsMargins(0, 0, 0, 0); pskLayout->setSpacing(0);
+    auto* pskHeading = new QLabel(uiText("PSB-Bake · dekodierter Text"), pskPage); pskHeading->setProperty("panelHeading", true);
+    pskHeading->setContentsMargins(12, 8, 12, 8); pskLayout->addWidget(pskHeading);
+    auto* pskBody = new QWidget(pskPage); auto* pskBodyLayout = new QVBoxLayout(pskBody); pskBodyLayout->setContentsMargins(8, 8, 8, 8);
     pskText_ = new QPlainTextEdit(pskPage); pskText_->setObjectName("pskBeaconText");
     pskText_->setReadOnly(true); pskText_->setUndoRedoEnabled(false); pskText_->setMaximumBlockCount(2000);
     auto pskFont = QFontDatabase::systemFont(QFontDatabase::FixedFont); pskFont.setPointSizeF(10); pskText_->setFont(pskFont);
     pskText_->setLineWrapMode(QPlainTextEdit::NoWrap);
     pskText_->setPlaceholderText(uiText("Warte auf PSK-Bakentext…\nSignalmitte im Audio etwa 1500 Hz (Suchbereich ±500 Hz).\nErste vollständige Texte nach etwa 20–40 Sekunden."));
-    pskLayout->addWidget(pskText_); contentPages_->addWidget(pskPage); layout->addWidget(contentPages_, 1);
+    pskBodyLayout->addWidget(pskText_); pskLayout->addWidget(pskBody, 1); contentPages_->addWidget(pskPage); layout->addWidget(contentPages_, 1);
     receiveStatistics_ = new CompactLabel(central, Qt::ElideRight); receiveStatistics_->setObjectName("receiveStatistics");
     auto statisticsFont = receiveStatistics_->font(); statisticsFont.setPointSizeF(9); receiveStatistics_->setFont(statisticsFont);
-    receiveStatistics_->setText(uiText("RX · Warte auf Audiodaten")); layout->addWidget(receiveStatistics_);
+    receiveStatistics_->setText(uiText("RX · Warte auf Audiodaten"));
     monitor_ = new ReceiveMonitor(central); monitor_->clear(uiText("Warte auf Audiodaten"), mode_);
-    auto* monitorRow = new QHBoxLayout; monitorRow->setSpacing(4); monitorRow->setContentsMargins(0, 0, 0, 0);
+    auto* monitorCard = new QFrame(central); monitorCard->setObjectName("monitorCard"); monitorCard->setProperty("panel", true);
+    auto* monitorRow = new QHBoxLayout(monitorCard); monitorRow->setSpacing(4); monitorRow->setContentsMargins(8, 8, 8, 8);
     const auto addRangeControl = [&](const QString& title, const QString& name, int minimum, int maximum, int value, const QString& help) {
         auto* control = new QWidget(central); control->setToolTip(help);
         auto* column = new QVBoxLayout(control); column->setContentsMargins(0, 0, 0, 0); column->setSpacing(2);
@@ -218,9 +237,9 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     };
     connect(minimumDb_, &QSlider::valueChanged, this, updateRange); connect(maximumDb_, &QSlider::valueChanged, this, updateRange);
     restoreDisplayRange();
-    monitorRow->addWidget(monitor_, 1); layout->addLayout(monitorRow);
+    monitorRow->addWidget(monitor_, 1); layout->addWidget(monitorCard);
     auto* footer = new QHBoxLayout; footer->setSpacing(8);
-    status_ = new CompactLabel(central, Qt::ElideRight); status_->setObjectName("statusText"); footer->addWidget(status_, 1);
+    footer->addWidget(receiveStatistics_, 1);
     modes_ = new QComboBox(central); modes_->setObjectName("modulation");
     for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410, Modulation::Martin1, Modulation::Martin2, Modulation::Scottie1, Modulation::Scottie2, Modulation::MmBeacon, Modulation::PskBeacon})
         modes_->addItem(isPskBeacon(mode) ? uiText("PSB-Bake") : isBeacon(mode) ? uiText("QO100 MM-Bake") : isSstv(mode) ? QString("SSTV %1").arg(modulationName(mode)) :
@@ -316,6 +335,11 @@ void MainWindow::updateButton() {
     const bool beacon = isReceiveOnly(mode_);
     contentPages_->setCurrentIndex(isPskBeacon(mode_) ? 2 : isBeacon(mode_) ? 1 : 0);
     start_->setText(running ? "STOP" : uiText("Senden"));
+    // QSS property selectors need repolishing only when the state changes.
+    if (start_->property("transmitting").toBool() != running) {
+        start_->setProperty("transmitting", running);
+        start_->style()->unpolish(start_); start_->style()->polish(start_); start_->update();
+    }
     start_->setEnabled(!beacon && (running || (!deviceScan_.valid() && deviceAvailable() && (image_.has_value() || bool(sstvImage_)))));
     overlayEdit_->setEnabled(!running); overlayAction_->setEnabled(!running); overlaySlots_->setEnabled(!running);
     waterfallId_->setEnabled(!running && !beacon); waterfallId_->setVisible(!beacon);

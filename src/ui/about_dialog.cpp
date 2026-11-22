@@ -7,6 +7,7 @@
 #include <QScreen>
 #include <QScrollBar>
 #include <QTextBrowser>
+#include <QTextDocument>
 #include <QVBoxLayout>
 namespace mm_sstv {
 AboutDialog::AboutDialog(QWidget* parent) : QDialog(parent) {
@@ -15,6 +16,9 @@ AboutDialog::AboutDialog(QWidget* parent) : QDialog(parent) {
     auto* layout = new QVBoxLayout(this);
     auto* browser = new QTextBrowser(this); browser->setObjectName("aboutDetails");
     browser->setOpenExternalLinks(true); browser->setUndoRedoEnabled(false);
+    browser->document()->setDefaultStyleSheet(
+        "a { color: #69c9f0; } th { background-color: #263646; }"
+        "td, th { border-color: #40536a; } h2, h3 { color: #d5e8fa; }");
     refreshText();
     connect(&Language::instance(), &Language::changed, this, [this] { retranslateUi(this); refreshText(); });
     layout->addWidget(browser, 1);

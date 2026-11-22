@@ -5,6 +5,7 @@
 #include <QApplication>
 #include <QKeyEvent>
 #include <QMouseEvent>
+#include <QFrame>
 #include <QGroupBox>
 #include <QLabel>
 #include <QPlainTextEdit>
@@ -28,21 +29,17 @@ BeaconView::BeaconView(QWidget* parent) : QWidget(parent) {
     auto* spots = new QSplitter(Qt::Vertical, columns); spots->setObjectName("beaconSpots");
     spots->setChildrenCollapsible(false);
     const auto addPane = [](QSplitter* splitter, const QString& title, const QString& name, QLabel** heading = nullptr) {
-        QWidget* pane = nullptr; QGroupBox* group = nullptr;
-        if (heading) {
-            // Native group-box styles may clip their caption independently of
-            // the panel width. Keep this heading outside the frame's painter.
-            pane = new QWidget(splitter); auto* rows = new QVBoxLayout(pane);
-            rows->setContentsMargins(0, 0, 0, 0); rows->setSpacing(2);
-            *heading = new QLabel(title, pane); (*heading)->setObjectName("beaconBulletinHeading");
-            (*heading)->setTextFormat(Qt::PlainText); (*heading)->setContentsMargins(6, 0, 16, 0);
-            (*heading)->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-            rows->addWidget(*heading); group = new QGroupBox(pane); rows->addWidget(group, 1);
-        } else {
-            group = new QGroupBox(title, splitter); pane = group;
-        }
+        auto* pane = new QFrame(splitter); pane->setProperty("panel", true);
+        auto* rows = new QVBoxLayout(pane); rows->setContentsMargins(0, 0, 0, 0); rows->setSpacing(0);
+        // Separate headings keep their full contents independent of the frame painter.
+        auto* caption = new QLabel(title, pane); caption->setProperty("panelHeading", true);
+        caption->setTextFormat(Qt::PlainText); caption->setContentsMargins(12, 8, 16, 8);
+        caption->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        if (heading) { *heading = caption; caption->setObjectName("beaconBulletinHeading"); }
+        rows->addWidget(caption);
+        auto* group = new QGroupBox(pane); group->setProperty("panelBody", true); rows->addWidget(group, 1);
         auto* column = new QVBoxLayout(group);
-        column->setContentsMargins(6, 6, 6, 6);
+        column->setContentsMargins(8, 8, 8, 8);
         auto* view = new QPlainTextEdit(group); view->setObjectName(name);
         view->setReadOnly(true); view->setUndoRedoEnabled(false);
         auto font = QFontDatabase::systemFont(QFontDatabase::FixedFont); font.setPointSizeF(9);

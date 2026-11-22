@@ -10,7 +10,6 @@ namespace mm_sstv {
 ImagePanel::ImagePanel(QWidget* parent, bool interactive) : QLabel(parent), interactive_(interactive) {
     setAcceptDrops(interactive); setAlignment(Qt::AlignCenter); setMinimumSize(160, 90);
     setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
-    setStyleSheet("QLabel { background: #e9edf0; border: 1px solid #aab4bc; border-radius: 4px; padding: 0px; }");
     setMargin(3); updateImage(); setEditable(true);
     connect(&Language::instance(), &Language::changed, this, [this] { if (image_.isNull()) updateImage(); });
 }
