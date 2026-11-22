@@ -16,6 +16,7 @@ int main(int argc, char** argv) {
         }
         QApplication app(argc, argv);
         QCoreApplication::setOrganizationName("HS-STV"); QCoreApplication::setApplicationName("HS-STV");
+        QCoreApplication::setApplicationVersion(QString::fromLatin1(MM_SSTV_VERSION));
         QSettings settings;
         // Preserve audio devices, levels and display preferences from the former name.
         if (!settings.value("migration/mmSstv", false).toBool()) {

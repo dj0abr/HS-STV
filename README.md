@@ -326,3 +326,10 @@ PortAudio wird über ein CMake-Paket, pkg-config oder `MM_PORTAUDIO_INCLUDE` und
 [Prüfergebnisse Bildversand](docs/BILDVERSAND.md) ·
 [Quellen und Lizenzen](docs/PROVENANCE.md) ·
 [Ursprüngliche Analyse](ANALYSE.md)
+
+## Hilfe und Lizenzangaben
+
+**Hilfe** in der Menüleiste (auch **F1**) öffnet die Programminformationen mit
+Version, GitHub-Link sowie Autoren und Lizenzen der verwendeten Bibliotheken
+und übernommenen Decoder. **Schließen** beendet das Fenster; der Empfang läuft
+währenddessen weiter.

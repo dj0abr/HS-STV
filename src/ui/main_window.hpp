@@ -26,6 +26,7 @@ class ImagePanel;
 class ReceiveMonitor;
 class BeaconView;
 class BulletinDialog;
+class AboutDialog;
 class MainWindow final : public QMainWindow {
 public:
     MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings, std::unique_ptr<AudioInput> input = nullptr);
@@ -37,6 +38,7 @@ private:
     void finishDeviceScan();
     void retryJpegSaves();
     void setup();
+    void showHelp();
     void toggle();
     void poll();
     void updateButton();
@@ -114,6 +116,7 @@ private:
     QProgressBar* progress_ = nullptr;
     QStackedWidget* contentPages_ = nullptr;
     QPointer<BulletinDialog> bulletinDialog_;
+    QPointer<AboutDialog> aboutDialog_;
     BeaconView* beaconView_ = nullptr;
     QPlainTextEdit* pskText_ = nullptr;
     QAction* open_ = nullptr;

@@ -23,6 +23,8 @@
 #include <QMimeData>
 #include <QProgressBar>
 #include <QPlainTextEdit>
+#include <QTextBrowser>
+#include <QMenuBar>
 #include <QTextDocument>
 #include <QPushButton>
 #include <QSlider>
@@ -203,6 +205,28 @@ private slots:
         bool failed = false;
         try { invalid.saveJpeg("image.jpg", first.jpeg); } catch (const std::exception&) { failed = true; }
         QVERIFY(failed);
+    }
+    void helpShowsCreditsAndKeepsReceptionRunning() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
+        auto input = std::make_unique<ContinuousInput>(); auto* capture = input.get();
+        MainWindow window(std::make_unique<FakeOutput>(state), settings, std::move(input)); window.show();
+        QTRY_VERIFY(capture->callbacks > 0);
+        auto* help = window.findChild<QAction*>("helpAbout"); QVERIFY(help); QVERIFY(window.menuBar()->actions().contains(help));
+        QCOMPARE(help->text().remove('&'), QString("Hilfe")); help->trigger();
+        QPointer<QDialog> dialog = window.findChild<QDialog*>("aboutDialog"); QVERIFY(dialog); QVERIFY(dialog->isVisible()); QVERIFY(!dialog->isModal());
+        auto* details = dialog->findChild<QTextBrowser*>("aboutDetails"); QVERIFY(details); QVERIFY(details->openExternalLinks());
+        const auto text = details->toPlainText();
+        QVERIFY(text.contains("HS_STV - QO100 Bildübertragung und Bakenmonitor by DJ0ABR"));
+        QVERIFY(text.contains("Version 1.0")); QVERIFY(text.contains("https://github.com/dj0abr/HS-STV"));
+        QVERIFY(text.contains("GPL-3.0")); QVERIFY(text.contains("liquid-dsp")); QVERIFY(text.contains("Joseph Gaeddert"));
+        QVERIFY(text.contains("Arash Partow")); QVERIFY(text.contains("General Schifra License"));
+        QVERIFY(text.contains("Jean-loup Gailly")); QVERIFY(text.contains("The Qt Company"));
+        QVERIFY(text.contains("PulseAudio") != text.contains("PortAudio"));
+        help->trigger(); QCOMPARE(window.findChildren<QDialog*>("aboutDialog").size(), 1);
+        const auto before = capture->callbacks.load(); QTRY_VERIFY(capture->callbacks > before + 3);
+        if (qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT")) QVERIFY(dialog->grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + ".help.png"));
+        auto* close = dialog->findChild<QPushButton*>("aboutCloseButton"); QVERIFY(close); close->click(); QTRY_VERIFY(dialog.isNull());
+        QVERIFY(capture->active); QCOMPARE(state.starts, 0u);
     }
     void openReceiveFolderUsesDesktopServices() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;

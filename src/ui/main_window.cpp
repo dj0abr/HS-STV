@@ -38,6 +38,7 @@
 #include <QStackedWidget>
 #include "beacon_view.hpp"
 #include "bulletin_dialog.hpp"
+#include "about_dialog.hpp"
 #include <QVBoxLayout>
 #include <algorithm>
 #include <cmath>
@@ -92,6 +93,9 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     auto* menu = menuBar()->addMenu("Setup");
     auto* audio = menu->addAction("Soundkarten…"); audio->setObjectName("audioSetup");
     connect(audio, &QAction::triggered, this, [this] { setup(); });
+    auto* help = menuBar()->addAction("&Hilfe"); help->setObjectName("helpAbout"); help->setMenuRole(QAction::NoRole);
+    help->setShortcut(QKeySequence::HelpContents); help->setToolTip("Über HS_STV · Version, Bibliotheken und Lizenzen");
+    connect(help, &QAction::triggered, this, [this] { showHelp(); });
     auto* central = new QWidget(this); auto* layout = new QVBoxLayout(central);
     layout->setContentsMargins(6, 6, 6, 6); layout->setSpacing(6);
     contentPages_ = new QStackedWidget(central);
@@ -575,6 +579,10 @@ void MainWindow::archiveSstv() {
         receiveInfo_->setToolTip("Automatisch gespeichert: " + archive_.savePng(receivedName_, receivedSstv_));
         sstvDirty_ = false;
     } catch (const std::exception& e) { receiveInfo_->setText(QString::fromUtf8(e.what())); }
+}
+void MainWindow::showHelp() {
+    if (aboutDialog_) { aboutDialog_->show(); aboutDialog_->raise(); aboutDialog_->activateWindow(); return; }
+    aboutDialog_ = new AboutDialog(this); aboutDialog_->show();
 }
 void MainWindow::openBulletinArchive() {
     if (bulletinDialog_) { bulletinDialog_->show(); bulletinDialog_->raise(); bulletinDialog_->activateWindow(); return; }
