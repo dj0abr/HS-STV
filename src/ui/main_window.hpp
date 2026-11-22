@@ -62,6 +62,7 @@ private:
     Transmitter transmitter_;
     QSettings& settings_;
     Receiver receiver_;
+    std::optional<ReceiveStatus> lastReceiveStatus_;
     ReceivedArchive archive_;
     bool sstvDirty_ = false;
     std::string inputDevice_;

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "main_window.hpp"
+#include "language.hpp"
+#include "bulletin_dialog.hpp"
 #include "image_panel.hpp"
 #include "receive_monitor.hpp"
 #include "overlay_editor.hpp"
@@ -115,6 +117,7 @@ public slots:
     void captureFolderUrl(const QUrl& url) { openedFolder_ = url; }
 private slots:
     void init() {
+        Language::instance().setCode("de");
         originalDirectory_ = QDir::currentPath(); receiveRoot_ = std::make_unique<QTemporaryDir>();
         QVERIFY(receiveRoot_->isValid()); QVERIFY(QDir::setCurrent(receiveRoot_->path())); openedFolder_ = QUrl();
     }
@@ -205,6 +208,67 @@ private slots:
         bool failed = false;
         try { invalid.saveJpeg("image.jpg", first.jpeg); } catch (const std::exception&) { failed = true; }
         QVERIFY(failed);
+    }
+    void languageSwitchKeepsTransmissionRunning() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
+        MainWindow window(std::make_unique<FakeOutput>(state), settings); QVERIFY(window.loadImage(picture(dir)));
+        auto* button = window.findChild<QPushButton*>("transmitButton"); button->click(); QCOMPARE(state.starts, 1u); QVERIFY(state.open);
+        window.findChild<QAction*>("languageEnglish")->trigger(); QCOMPARE(button->text(), QString("STOP"));
+        QCOMPARE(state.starts, 1u); QVERIFY(state.open); QVERIFY(bool(state.render));
+        std::array<float, 4800> block{}; QVERIFY(state.render(block.data(), block.size()) > 0);
+        window.findChild<QAction*>("languageGerman")->trigger(); QCOMPARE(state.starts, 1u); QVERIFY(state.open);
+        button->click(); QVERIFY(!state.open);
+    }
+    void languagesSwitchLiveAndPersistWithoutChangingPayloads() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
+        settings.setValue("overlay/text0", "Bild"); settings.setValue("overlay/text2", "Empfang");
+        auto input = std::make_unique<ContinuousInput>(); auto* capture = input.get();
+        MainWindow window(std::make_unique<FakeOutput>(state), settings, std::move(input)); window.show(); QTRY_VERIFY(capture->callbacks > 0);
+        QVERIFY(window.loadImage(picture(dir))); const QImage image(picture(dir)); const auto preview = window.findChild<ImagePanel*>("imagePreview")->grab().toImage();
+        const auto starts = capture->starts.load(); const auto output = settings.value("audio/output");
+        auto* english = window.findChild<QAction*>("languageEnglish"); auto* german = window.findChild<QAction*>("languageGerman");
+        QVERIFY(english); QVERIFY(german); QVERIFY(german->isChecked());
+        const QString payload = QStringLiteral("Bild\nEmpfang\nSchließen & Grüße");
+        auto* cw = window.findChild<QPlainTextEdit*>("beaconCwText"); auto* psk = window.findChild<QPlainTextEdit*>("pskBeaconText");
+        cw->setPlainText(payload); psk->setPlainText(payload);
+        Bulletin bulletin; bulletin.filename = "Bild.blt"; bulletin.title = "Empfang"; bulletin.text = payload; bulletin.receivedAt = QDateTime::currentDateTimeUtc();
+        QPointer<BulletinDialog> reader = new BulletinDialog(bulletin, &window); reader->show();
+        QPointer<OverlayEditor> editor = new OverlayEditor(image, loadTextOverlay(settings), &window); editor->setAttribute(Qt::WA_DeleteOnClose); editor->show();
+        window.findChild<QAction*>("helpAbout")->trigger(); auto* help = window.findChild<QDialog*>("aboutDialog"); QVERIFY(help);
+        english->trigger(); QCOMPARE(Language::code(), QString("en")); QVERIFY(english->isChecked());
+        QCOMPARE(settings.value("ui/language").toString(), QString("en"));
+        QCOMPARE(window.windowTitle(), QString("HS_STV - QO100 Image Transfer and Beacon Monitor"));
+        QCOMPARE(window.findChild<QAction*>("openImage")->text(), QString("Open image…"));
+        QCOMPARE(window.findChild<QPushButton*>("transmitButton")->text(), QString("Transmit"));
+        QCOMPARE(window.findChild<QAction*>("helpAbout")->text(), QString("&Help"));
+        QVERIFY(window.findChild<QLabel*>("statusText")->text().contains("System default"));
+        QVERIFY(!window.findChild<QLabel*>("receiveStatistics")->text().contains("korr."));
+        QVERIFY(help->findChild<QTextBrowser*>("aboutDetails")->toPlainText().contains("Libraries used"));
+        QVERIFY(!help->findChild<QTextBrowser*>("aboutDetails")->toPlainText().contains("Verwendete Bibliotheken"));
+        QCOMPARE(help->findChild<QPushButton*>("aboutCloseButton")->text(), QString("Close"));
+        QCOMPARE(editor->findChild<QLineEdit*>("overlayOwnCall")->text(), QString("Bild"));
+        QCOMPARE(editor->findChild<QLineEdit*>("overlayFreeText1")->text(), QString("Empfang"));
+        QCOMPARE(reader->findChild<QPlainTextEdit*>("bulletinReaderText")->toPlainText(), payload);
+        QVERIFY(reader->findChild<QComboBox*>("bulletinArchiveChoice")->currentText().contains("(current)"));
+        QCOMPARE(cw->toPlainText(), payload); QCOMPARE(psk->toPlainText(), payload);
+        QCOMPARE(window.findChild<ImagePanel*>("imagePreview")->grab().toImage(), preview); QCOMPARE(capture->starts.load(), starts);
+        QCOMPARE(settings.value("audio/output"), output);
+        const auto callbacks = capture->callbacks.load(); QTRY_VERIFY(capture->callbacks > callbacks + 3);
+        if (qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT")) {
+            QVERIFY(window.grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + ".english.png"));
+            QVERIFY(help->grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + ".english-help.png"));
+        }
+        german->trigger(); QCOMPARE(window.findChild<QPushButton*>("transmitButton")->text(), QString("Senden"));
+        QCOMPARE(window.findChild<QAction*>("openImage")->text(), QString("Bild öffnen…"));
+        QVERIFY(help->findChild<QTextBrowser*>("aboutDetails")->toPlainText().contains("Verwendete Bibliotheken"));
+        QCOMPARE(cw->toPlainText(), payload); QCOMPARE(psk->toPlainText(), payload);
+        editor->close(); reader->close(); QTRY_VERIFY(reader.isNull()); QTRY_VERIFY(editor.isNull());
+        english->trigger(); QSettings reopened(dir.filePath("prefs.ini"), QSettings::IniFormat);
+        MainWindow restored(std::make_unique<FakeOutput>(state), reopened);
+        QVERIFY(restored.findChild<QAction*>("languageEnglish")->isChecked());
+        QCOMPARE(restored.findChild<QPushButton*>("transmitButton")->text(), QString("Transmit"));
+        QCOMPARE(reopened.value("overlay/text0").toString(), QString("Bild"));
+        QCOMPARE(capture->starts.load(), starts); QCOMPARE(state.starts, 0u);
     }
     void helpShowsCreditsAndKeepsReceptionRunning() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;

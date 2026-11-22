@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "language.hpp"
 #include "image_codec.hpp"
 #include "mm_sstv/protocol.hpp"
 #include <QBuffer>
@@ -55,7 +56,7 @@ QImage decodeReceivedJpeg(const std::vector<std::uint8_t>& bytes, bool complete)
 
 QImage fitPicture(const QImage& original, QSize target) {
     if (original.isNull() || !target.isValid() || target.width() > 4096 || target.height() > 4096)
-        throw std::invalid_argument("Ungültiges Bild oder Zielformat");
+        throw std::invalid_argument(uiText("Ungültiges Bild oder Zielformat").toStdString());
     QImage canvas(target, QImage::Format_RGB32); canvas.fill(Qt::white);
     {
         QPainter painter(&canvas); painter.setRenderHint(QPainter::SmoothPixmapTransform);
@@ -75,12 +76,12 @@ PreparedPicture preparePicture(const QImage& original, QSize target, const TextO
     const auto canvas = drawTextOverlay(fitPicture(original, target), overlay);
     for (int quality = 90; quality >= 20; quality -= 5) {
         QByteArray encoded; QBuffer buffer(&encoded); buffer.open(QIODevice::WriteOnly);
-        if (!canvas.save(&buffer, "JPEG", quality)) throw std::runtime_error("JPEG-Kodierung nicht verfügbar");
+        if (!canvas.save(&buffer, "JPEG", quality)) throw std::runtime_error(uiText("JPEG-Kodierung nicht verfügbar").toStdString());
         if (static_cast<std::size_t>(encoded.size()) > ImageTransmission::maxJpegBytes) continue;
         const auto* begin = reinterpret_cast<const std::uint8_t*>(encoded.constData());
         PreparedPicture result; result.jpeg.assign(begin, begin + encoded.size());
         result.preview = QImage::fromData(encoded, "JPEG"); result.quality = quality; return result;
     }
-    throw std::runtime_error("Bild bleibt größer als 200 kB. Bitte ein kleineres Zielformat wählen.");
+    throw std::runtime_error(uiText("Bild bleibt größer als 200 kB. Bitte ein kleineres Zielformat wählen.").toStdString());
 }
 }

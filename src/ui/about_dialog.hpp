@@ -5,5 +5,7 @@ namespace mm_sstv {
 class AboutDialog final : public QDialog {
 public:
     explicit AboutDialog(QWidget* parent = nullptr);
+private:
+    void refreshText();
 };
 }

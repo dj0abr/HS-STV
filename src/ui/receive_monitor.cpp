@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "language.hpp"
 #include "receive_monitor.hpp"
 #include "mm_sstv/modem_mode.hpp"
 #include "mm_sstv/audio_spectrum.hpp"
@@ -17,14 +18,15 @@ constexpr double maxHz = 4000;
 ReceiveMonitor::ReceiveMonitor(QWidget* parent) : QWidget(parent) {
     setObjectName("receiveMonitor"); setMinimumSize(300, 96); setMaximumHeight(144);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    setToolTip("Empfangsaudio vor AFC und AGC · 0–4000 Hz\nGrün: erkannter Pilot · Fläche: Pilotsuche 20–900 Hz\nGelb: Datenband der aktuellen Empfangsmitte\nKonstellation: tatsächlich empfangene I/Q-Symbole nach dem Symboltracking");
+    setToolTip(uiText("Empfangsaudio vor AFC und AGC · 0–4000 Hz\nGrün: erkannter Pilot · Fläche: Pilotsuche 20–900 Hz\nGelb: Datenband der aktuellen Empfangsmitte\nKonstellation: tatsächlich empfangene I/Q-Symbole nach dem Symboltracking"));
     clear();
+    connect(&Language::instance(), &Language::changed, this, [this] { retranslateUi(this); update(); });
 }
 void ReceiveMonitor::clear(const QString& message, Modulation mode) {
     setMaximumHeight(isSstv(mode) ? 180 : 144); setMinimumHeight(isSstv(mode) ? 144 : 96);
-    setToolTip(isPskBeacon(mode) ? "PSB-Bake · Empfangsaudio 0–4000 Hz\nBPSK/Manchester · 400 bit/s · Signalmitte etwa 1500 Hz, Trägersuche ±500 Hz.\nGelbe Linien: Datenband · rote Linie: Signalmitte; kein separater Pilotton." : isSstv(mode) ? "SSTV-Spektrum und Wasserfall · 0–4000 Hz\nWasserfall: neueste Werte oben · 6 Sekunden Verlauf · 23,4 Hz Frequenzauflösung · 43-ms-Analysefenster\nFarben: an und unter Min schwarz · an und über Max rot\nSync: 1200 Hz · Bildsignal: 1500–2300 Hz (schattiert)\nHilfslinien zeigen die Sollfrequenzen vor AFC; Frequenz am Funkgerät fein abstimmen." :
-        "Empfangsaudio vor AFC und AGC · 0–4000 Hz\nGrün: erkannter Pilot · Fläche: Pilotsuche 20–900 Hz\nGelb: Datenband · Konstellation: empfangene I/Q-Symbole");
-    status_ = {}; status_.modulation = mode; status_.state = message; points_.clear(); waterfall_.clear(); waterfallBinHz_ = 0;
+    setToolTip(isPskBeacon(mode) ? uiText("PSB-Bake · Empfangsaudio 0–4000 Hz\nBPSK/Manchester · 400 bit/s · Signalmitte etwa 1500 Hz, Trägersuche ±500 Hz.\nGelbe Linien: Datenband · rote Linie: Signalmitte; kein separater Pilotton.") : isSstv(mode) ? uiText("SSTV-Spektrum und Wasserfall · 0–4000 Hz\nWasserfall: neueste Werte oben · 6 Sekunden Verlauf · 23,4 Hz Frequenzauflösung · 43-ms-Analysefenster\nFarben: an und unter Min schwarz · an und über Max rot\nSync: 1200 Hz · Bildsignal: 1500–2300 Hz (schattiert)\nHilfslinien zeigen die Sollfrequenzen vor AFC; Frequenz am Funkgerät fein abstimmen.") :
+        uiText("Empfangsaudio vor AFC und AGC · 0–4000 Hz\nGrün: erkannter Pilot · Fläche: Pilotsuche 20–900 Hz\nGelb: Datenband · Konstellation: empfangene I/Q-Symbole"));
+    status_ = {}; status_.modulation = mode; status_.state = uiMessage(message); points_.clear(); waterfall_.clear(); waterfallBinHz_ = 0;
     automaticMinDb_ = -90; automaticMaxDb_ = -20; autoLevel_.reset();
     if (isSstv(mode)) applyAutoLevels(); else setDbRange(minDb_, maxDb_);
     updateGeometry(); update();
@@ -84,7 +86,7 @@ void ReceiveMonitor::paintEvent(QPaintEvent*) {
     const auto x = [&](double hz) { return spectrum.left() + hz / maxHz * spectrum.width(); };
     const auto y = [&](double db) { return spectrum.top() + std::clamp((maxDb - db) / (maxDb - minDb), 0.0, 1.0) * spectrum.height(); };
     p.setPen(label); p.drawText(QRectF(8, 4, spectrum.right() - 8, 20), Qt::AlignLeft | Qt::AlignVCenter,
-        analog ? QString("SSTV %1 · AFC %2 Hz").arg(modulationName(status_.modulation)).arg(status_.offset, 0, 'f', 1) : QStringLiteral("Empfangsaudio · dBFS/Bin"));
+        analog ? QString("SSTV %1 · AFC %2 Hz").arg(modulationName(status_.modulation)).arg(status_.offset, 0, 'f', 1) : uiText("Empfangsaudio · dBFS/Bin"));
     if (!status_.spectrum.empty())
         p.drawText(QRectF(8, 4, spectrum.right() - 8, 20), Qt::AlignRight | Qt::AlignVCenter, QString("%1 dBFS").arg(status_.level, 0, 'f', 1));
     if (analog) {
@@ -152,7 +154,7 @@ void ReceiveMonitor::paintEvent(QPaintEvent*) {
     }
     p.restore();
     if (status_.spectrum.empty()) {
-        p.setPen(label); p.drawText(spectrum, Qt::AlignCenter, status_.state.isEmpty() ? QStringLiteral("Warte auf Audiodaten") : status_.state);
+        p.setPen(label); p.drawText(spectrum, Qt::AlignCenter, status_.state.isEmpty() ? uiText("Warte auf Audiodaten") : uiMessage(status_.state));
     }
     if (analog) {
         if (!waterfall_.empty() && waterfallBinHz_ > 0) {

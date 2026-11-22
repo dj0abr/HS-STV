@@ -333,3 +333,18 @@ PortAudio wird über ein CMake-Paket, pkg-config oder `MM_PORTAUDIO_INCLUDE` und
 Version, GitHub-Link sowie Autoren und Lizenzen der verwendeten Bibliotheken
 und übernommenen Decoder. **Schließen** beendet das Fenster; der Empfang läuft
 währenddessen weiter.
+
+## Sprache: Deutsch und Englisch
+
+Unter **Setup → Sprache → Deutsch / English** lässt sich die Oberfläche direkt
+umschalten. Deutsch ist die Voreinstellung. Die Auswahl wird gespeichert und beim
+nächsten Start wiederhergestellt. Menüs, Dialoge, Hilfetexte und Statusanzeigen
+wechseln ohne Neustart; laufender Empfang und Sendung bleiben aktiv.
+
+Empfangene Bakenmeldungen und Bulletins, Dateinamen, Gerätenamen sowie eingegebene
+Rufzeichen und Freitexte bleiben unverändert. Die englischen Übersetzungen sind
+in `translations/en.json` enthalten und über Qt-Ressourcen ins Programm eingebettet.
+Es werden keine zusätzlichen Übersetzungsprogramme und keine Python-Komponenten
+benötigt. Qt-eigene Dialogtexte verwenden, sofern vorhanden, das zur Qt-Laufzeit
+gehörende deutsche Sprachpaket; die Anwendungsoberfläche selbst ist vollständig
+eingebettet.

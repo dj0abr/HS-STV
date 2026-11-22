@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "language.hpp"
 #include "image_panel.hpp"
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -11,6 +12,7 @@ ImagePanel::ImagePanel(QWidget* parent, bool interactive) : QLabel(parent), inte
     setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     setStyleSheet("QLabel { background: #e9edf0; border: 1px solid #aab4bc; border-radius: 4px; padding: 0px; }");
     setMargin(3); updateImage(); setEditable(true);
+    connect(&Language::instance(), &Language::changed, this, [this] { if (image_.isNull()) updateImage(); });
 }
 void ImagePanel::setEditable(bool editable) {
     editable_ = editable; setAcceptDrops(interactive_ && editable_);
@@ -18,7 +20,7 @@ void ImagePanel::setEditable(bool editable) {
 }
 void ImagePanel::setImage(QImage image) { image_ = std::move(image); updateImage(); }
 void ImagePanel::updateImage() {
-    if (image_.isNull()) { clear(); setText(interactive_ ? "Bild hier ablegen\noder zum Öffnen anklicken" : "Warte auf Bildempfang"); }
+    if (image_.isNull()) { clear(); setText(interactive_ ? uiText("Bild hier ablegen\noder zum Öffnen anklicken") : uiText("Warte auf Bildempfang")); }
     else setPixmap(QPixmap::fromImage(image_).scaled(contentsRect().size() - QSize(6, 6), Qt::KeepAspectRatio, Qt::SmoothTransformation));
 }
 void ImagePanel::resizeEvent(QResizeEvent* event) { QLabel::resizeEvent(event); updateImage(); }

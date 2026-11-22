@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "language.hpp"
 #include "overlay_editor.hpp"
 #include <QCheckBox>
 #include <QComboBox>
@@ -34,7 +35,7 @@ OverlayPreview::OverlayPreview(QImage base, TextOverlay& overlay, QWidget* paren
     : QWidget(parent), base_(std::move(base)), overlay_(overlay) {
     setObjectName("overlayPreview"); setMinimumSize(160, 128); setFocusPolicy(Qt::StrongFocus); setMouseTracking(true);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    setToolTip("Text anklicken und ziehen · Pfeiltasten: 1 Bildpixel · Umschalt: 5 Bildpixel");
+    setToolTip(uiText("Text anklicken und ziehen · Pfeiltasten: 1 Bildpixel · Umschalt: 5 Bildpixel"));
 }
 QRectF OverlayPreview::imageRect() const {
     const auto available = QRectF(rect()).adjusted(6, 6, -6, -6);
@@ -94,11 +95,11 @@ void OverlayPreview::keyPressEvent(QKeyEvent* event) {
 }
 OverlayEditor::OverlayEditor(QImage base, TextOverlay overlay, QWidget* parent)
     : QDialog(parent), overlay_(std::move(overlay)) {
-    setObjectName("textOverlayEditor"); setWindowTitle("Sendebild · Textüberlagerung"); setMinimumSize(520, 320);
+    setObjectName("textOverlayEditor"); setWindowTitle(uiText("Sendebild · Textüberlagerung")); setMinimumSize(520, 320);
     auto* layout = new QVBoxLayout(this); layout->setContentsMargins(8, 8, 8, 8); layout->setSpacing(6);
     auto* content = new QHBoxLayout; content->setSpacing(8);
     auto* picture = new QVBoxLayout; preview_ = new OverlayPreview(std::move(base), overlay_, this); picture->addWidget(preview_, 1);
-    auto* help = new QLabel("Texte im Bild verschieben.\nPfeiltasten: 1 Pixel · Umschalt: 5 Pixel", this); help->setWordWrap(true);
+    auto* help = new QLabel(uiText("Texte im Bild verschieben.\nPfeiltasten: 1 Pixel · Umschalt: 5 Pixel"), this); help->setWordWrap(true);
     auto helpFont = help->font(); helpFont.setPointSizeF(8); help->setFont(helpFont); picture->addWidget(help); content->addLayout(picture, 1);
     auto* scroll = new QScrollArea(this); scroll->setWidgetResizable(true); scroll->setMinimumWidth(250); scroll->setFrameShape(QFrame::NoFrame);
     auto* controls = new QWidget(scroll); auto* column = new QVBoxLayout(controls); column->setContentsMargins(0, 0, 2, 0); column->setSpacing(6);
@@ -108,18 +109,18 @@ OverlayEditor::OverlayEditor(QImage base, TextOverlay overlay, QWidget* parent)
         field->setObjectName(i == 0 ? "overlayOwnCall" : i == 1 ? "overlayOtherCall" : QString("overlayFreeText%1").arg(i-1));
         field->installEventFilter(this);
         connect(field, &QLineEdit::textChanged, this, [this, i](const QString& text) { overlay_.texts[i] = text; selectField(i); });
-        if (i < 2) station->addRow(i == 0 ? "Eigenes Rufzeichen" : "Gegenstation", field);
+        if (i < 2) station->addRow(i == 0 ? uiText("Eigenes Rufzeichen") : uiText("Gegenstation"), field);
     }
     column->addLayout(station);
-    textsGroup_ = new QGroupBox(QString("Freitexte · Auswahl %1").arg(overlay_.selected+1), controls); auto* texts = new QFormLayout(textsGroup_);
+    textsGroup_ = new QGroupBox(uiText("Freitexte · Auswahl %1").arg(overlay_.selected+1), controls); auto* texts = new QFormLayout(textsGroup_);
     for (unsigned i = 2; i < fields_.size(); ++i) texts->addRow(QString::number(i-1), fields_[i]);
     column->addWidget(textsGroup_);
     auto* formatting = new QFormLayout;
-    layer_ = new QComboBox(controls); layer_->setObjectName("overlayLayer"); layer_->addItems({"Eigenes Rufzeichen", "Gegenstation", "Freitext"});
-    font_ = new QComboBox(controls); font_->setObjectName("overlayFont"); font_->addItems({"Serifenlos", "Serifen", "Monospace"});
-    size_ = new QSpinBox(controls); size_->setObjectName("overlaySize"); size_->setRange(10, 48); size_->setSuffix(" px"); size_->setToolTip("Schriftgröße bezogen auf 320 × 256 Pixel; größere Bildformate skalieren mit.");
-    bold_ = new QCheckBox("Fett", controls); bold_->setObjectName("overlayBold");
-    formatting->addRow("Text im Bild", layer_); formatting->addRow("Schrift", font_); formatting->addRow("Größe", size_); formatting->addRow("", bold_);
+    layer_ = new QComboBox(controls); layer_->setObjectName("overlayLayer"); layer_->addItems({uiText("Eigenes Rufzeichen"), uiText("Gegenstation"), uiText("Freitext")});
+    font_ = new QComboBox(controls); font_->setObjectName("overlayFont"); font_->addItems({uiText("Serifenlos"), uiText("Serifen"), "Monospace"});
+    size_ = new QSpinBox(controls); size_->setObjectName("overlaySize"); size_->setRange(10, 48); size_->setSuffix(" px"); size_->setToolTip(uiText("Schriftgröße bezogen auf 320 × 256 Pixel; größere Bildformate skalieren mit."));
+    bold_ = new QCheckBox(uiText("Fett"), controls); bold_->setObjectName("overlayBold");
+    formatting->addRow(uiText("Text im Bild"), layer_); formatting->addRow(uiText("Schrift"), font_); formatting->addRow(uiText("Größe"), size_); formatting->addRow("", bold_);
     column->addLayout(formatting); column->addStretch(); scroll->setWidget(controls); content->addWidget(scroll); layout->addLayout(content, 1);
     connect(layer_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) { selectLayer(index); });
     const auto styleChanged = [this] { auto& item = overlay_.layers[layer_->currentIndex()]; item.font = font_->currentIndex(); item.size = size_->value(); item.bold = bold_->isChecked(); preview_->update(); };
@@ -127,8 +128,9 @@ OverlayEditor::OverlayEditor(QImage base, TextOverlay overlay, QWidget* parent)
     connect(size_, QOverload<int>::of(&QSpinBox::valueChanged), this, styleChanged); connect(bold_, &QCheckBox::toggled, this, styleChanged);
     preview_->selected = [this](int index) { selectLayer(index); };
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    buttons->button(QDialogButtonBox::Ok)->setText("Übernehmen"); buttons->button(QDialogButtonBox::Cancel)->setText("Abbrechen");
+    buttons->button(QDialogButtonBox::Ok)->setText(uiText("Übernehmen")); buttons->button(QDialogButtonBox::Cancel)->setText(uiText("Abbrechen"));
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept); connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject); layout->addWidget(buttons);
+    connect(&Language::instance(), &Language::changed, this, [this] { retranslateUi(this); });
     selectLayer(0); QSize initial(760, 450);
     if (const auto* screen = QGuiApplication::primaryScreen()) initial = initial.boundedTo(screen->availableGeometry().size()-QSize(24, 48));
     resize(initial.expandedTo(minimumSize()));
@@ -141,7 +143,7 @@ void OverlayEditor::selectLayer(int index) {
 void OverlayEditor::selectField(unsigned index) {
     if (!layer_) return; // Fields may receive events while the form is built.
     if (index >= 2) overlay_.selected = int(index - 2);
-    textsGroup_->setTitle(QString("Freitexte · Auswahl %1").arg(overlay_.selected+1));
+    textsGroup_->setTitle(uiText("Freitexte · Auswahl %1").arg(overlay_.selected+1));
     selectLayer(index < 2 ? int(index) : 2); preview_->update();
 }
 bool OverlayEditor::eventFilter(QObject* object, QEvent* event) {

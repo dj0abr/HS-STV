@@ -1,20 +1,32 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "language.hpp"
 #include "about_dialog.hpp"
 #include <QDialogButtonBox>
 #include <QGuiApplication>
 #include <QPushButton>
 #include <QScreen>
+#include <QScrollBar>
 #include <QTextBrowser>
 #include <QVBoxLayout>
 namespace mm_sstv {
 AboutDialog::AboutDialog(QWidget* parent) : QDialog(parent) {
-    setObjectName("aboutDialog"); setWindowTitle("Hilfe · HS_STV"); setAttribute(Qt::WA_DeleteOnClose);
+    setObjectName("aboutDialog"); setWindowTitle(uiText("Hilfe · HS_STV")); setAttribute(Qt::WA_DeleteOnClose);
     setMinimumSize(480, 360);
     auto* layout = new QVBoxLayout(this);
     auto* browser = new QTextBrowser(this); browser->setObjectName("aboutDetails");
     browser->setOpenExternalLinks(true); browser->setUndoRedoEnabled(false);
-    QString html = QStringLiteral(
-        "<h2>HS_STV - QO100 Bildübertragung und Bakenmonitor by DJ0ABR</h2>"
+    refreshText();
+    connect(&Language::instance(), &Language::changed, this, [this] { retranslateUi(this); refreshText(); });
+    layout->addWidget(browser, 1);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
+    auto* close = buttons->button(QDialogButtonBox::Close); close->setText(uiText("Schließen")); close->setObjectName("aboutCloseButton");
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::close); layout->addWidget(buttons);
+    QSize size(860, 640);
+    if (auto* screen = QGuiApplication::primaryScreen()) size = size.boundedTo(screen->availableGeometry().size() - QSize(32, 48));
+    resize(size.expandedTo(minimumSize()));
+}
+void AboutDialog::refreshText() {
+    QString html = uiText("<h2>HS_STV - QO100 Bildübertragung und Bakenmonitor by DJ0ABR</h2>"
         "<p><b>Version %1</b></p>"
         "<p>Github: <a href=\"https://github.com/dj0abr/HS-STV\">https://github.com/dj0abr/HS-STV</a><br>"
         "License: <a href=\"https://www.gnu.org/licenses/gpl-3.0.html\">GPL-3.0</a></p>"
@@ -27,15 +39,12 @@ AboutDialog::AboutDialog(QWidget* parent) : QDialog(parent) {
         "<tr><td><a href=\"https://zlib.net/\">zlib</a></td><td>Jean-loup Gailly und Mark Adler</td><td>Zlib</td></tr>")
         .arg(QString::fromLatin1(MM_SSTV_VERSION), QString::fromLatin1(qVersion()));
 #ifdef MM_SSTV_AUDIO_PORTAUDIO
-    html += QStringLiteral(
-        "<tr><td><a href=\"https://www.portaudio.com/\">PortAudio</a></td><td>Ross Bencina, Phil Burk und Mitwirkende</td><td>MIT</td></tr>");
+    html += uiText("<tr><td><a href=\"https://www.portaudio.com/\">PortAudio</a></td><td>Ross Bencina, Phil Burk und Mitwirkende</td><td>MIT</td></tr>");
 #else
-    html += QStringLiteral(
-        "<tr><td><a href=\"https://www.freedesktop.org/wiki/Software/PulseAudio/\">PulseAudio (libpulse)</a></td>"
+    html += uiText("<tr><td><a href=\"https://www.freedesktop.org/wiki/Software/PulseAudio/\">PulseAudio (libpulse)</a></td>"
         "<td>Lennart Poettering, Pierre Ossman und Mitwirkende</td><td>LGPL-2.1-or-later</td></tr>");
 #endif
-    html += QStringLiteral(
-        "<tr><td><a href=\"http://www.schifra.com/\">Schifra</a><br>(Reed-Solomon)</td><td>Arash Partow</td>"
+    html += uiText("<tr><td><a href=\"http://www.schifra.com/\">Schifra</a><br>(Reed-Solomon)</td><td>Arash Partow</td>"
         "<td><a href=\"http://www.schifra.com/license.html\">General Schifra License</a><br>(laut enthaltenen Headern)</td></tr>"
         "</table>"
         "<h3>Übernommene Decoder und Verfahrensreferenzen</h3>"
@@ -45,12 +54,7 @@ AboutDialog::AboutDialog(QWidget* parent) : QDialog(parent) {
         "<p>Die Liste nennt direkt eingebundene Bibliotheken und übernommene Decoder. "
         "Bildformat-Plugins und weitere Systemabhängigkeiten werden durch Qt beziehungsweise das Betriebssystem bereitgestellt.</p>"
         "<p>Die Lizenz- und Copyright-Hinweise der jeweiligen Komponenten bleiben gültig.</p>");
-    browser->setHtml(html); layout->addWidget(browser, 1);
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
-    auto* close = buttons->button(QDialogButtonBox::Close); close->setText("Schließen"); close->setObjectName("aboutCloseButton");
-    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::close); layout->addWidget(buttons);
-    QSize size(860, 640);
-    if (auto* screen = QGuiApplication::primaryScreen()) size = size.boundedTo(screen->availableGeometry().size() - QSize(32, 48));
-    resize(size.expandedTo(minimumSize()));
+    auto* browser = findChild<QTextBrowser*>("aboutDetails");
+    const int position = browser->verticalScrollBar()->value(); browser->setHtml(html); browser->verticalScrollBar()->setValue(position);
 }
 }
