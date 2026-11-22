@@ -22,7 +22,7 @@ ReceiveMonitor::ReceiveMonitor(QWidget* parent) : QWidget(parent) {
 }
 void ReceiveMonitor::clear(const QString& message, Modulation mode) {
     setMaximumHeight(isSstv(mode) ? 180 : 144); setMinimumHeight(isSstv(mode) ? 144 : 96);
-    setToolTip(isPskBeacon(mode) ? "PSB-Bake · Empfangsaudio 0–4000 Hz\nBPSK/Manchester · 400 bit/s · Signalmitte etwa 1500 Hz, Trägersuche ±500 Hz.\nGelbe Linien: Datenband; kein separater Pilotton." : isSstv(mode) ? "SSTV-Spektrum und Wasserfall · 0–4000 Hz\nWasserfall: neueste Werte oben · 6 Sekunden Verlauf · 23,4 Hz Frequenzauflösung · 43-ms-Analysefenster\nFarben: an und unter Min schwarz · an und über Max rot\nSync: 1200 Hz · Bildsignal: 1500–2300 Hz (schattiert)\nHilfslinien zeigen die Sollfrequenzen vor AFC; Frequenz am Funkgerät fein abstimmen." :
+    setToolTip(isPskBeacon(mode) ? "PSB-Bake · Empfangsaudio 0–4000 Hz\nBPSK/Manchester · 400 bit/s · Signalmitte etwa 1500 Hz, Trägersuche ±500 Hz.\nGelbe Linien: Datenband · rote Linie: Signalmitte; kein separater Pilotton." : isSstv(mode) ? "SSTV-Spektrum und Wasserfall · 0–4000 Hz\nWasserfall: neueste Werte oben · 6 Sekunden Verlauf · 23,4 Hz Frequenzauflösung · 43-ms-Analysefenster\nFarben: an und unter Min schwarz · an und über Max rot\nSync: 1200 Hz · Bildsignal: 1500–2300 Hz (schattiert)\nHilfslinien zeigen die Sollfrequenzen vor AFC; Frequenz am Funkgerät fein abstimmen." :
         "Empfangsaudio vor AFC und AGC · 0–4000 Hz\nGrün: erkannter Pilot · Fläche: Pilotsuche 20–900 Hz\nGelb: Datenband · Konstellation: empfangene I/Q-Symbole");
     status_ = {}; status_.modulation = mode; status_.state = message; points_.clear(); waterfall_.clear(); waterfallBinHz_ = 0;
     automaticMinDb_ = -90; automaticMaxDb_ = -20; autoLevel_.reset();
@@ -126,6 +126,10 @@ void ReceiveMonitor::paintEvent(QPaintEvent*) {
         p.setPen(QPen(band, 1, Qt::DashLine));
         if (!analog) for (const auto edge : {status_.center - (psk ? 800 : parameters(status_.modulation).halfBandwidthHz()), status_.center + (psk ? 800 : parameters(status_.modulation).halfBandwidthHz())})
             p.drawLine(QPointF(x(edge), spectrum.top()), QPointF(x(edge), spectrum.bottom()));
+        if (psk) {
+            p.setPen(QPen(Qt::red, 1, Qt::DashLine));
+            p.drawLine(QPointF(x(status_.center), spectrum.top()), QPointF(x(status_.center), spectrum.bottom()));
+        }
     }
     if (analog) {
         for (const int hz : {1200, 1500, 2300}) {
