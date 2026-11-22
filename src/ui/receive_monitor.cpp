@@ -22,7 +22,7 @@ ReceiveMonitor::ReceiveMonitor(QWidget* parent) : QWidget(parent) {
 }
 void ReceiveMonitor::clear(const QString& message, Modulation mode) {
     setMaximumHeight(isSstv(mode) ? 180 : 144); setMinimumHeight(isSstv(mode) ? 144 : 96);
-    setToolTip(isSstv(mode) ? "SSTV-Spektrum und Wasserfall · 0–4000 Hz\nWasserfall: neueste Werte oben · 6 Sekunden Verlauf · 23,4 Hz Frequenzauflösung · 43-ms-Analysefenster\nFarben: an und unter Min schwarz · an und über Max rot\nSync: 1200 Hz · Bildsignal: 1500–2300 Hz (schattiert)\nHilfslinien zeigen die Sollfrequenzen vor AFC; Frequenz am Funkgerät fein abstimmen." :
+    setToolTip(isPskBeacon(mode) ? "PSB-Bake · Empfangsaudio 0–4000 Hz\nBPSK/Manchester · 400 bit/s · Signalmitte etwa 1500 Hz, Trägersuche ±500 Hz.\nGelbe Linien: Datenband; kein separater Pilotton." : isSstv(mode) ? "SSTV-Spektrum und Wasserfall · 0–4000 Hz\nWasserfall: neueste Werte oben · 6 Sekunden Verlauf · 23,4 Hz Frequenzauflösung · 43-ms-Analysefenster\nFarben: an und unter Min schwarz · an und über Max rot\nSync: 1200 Hz · Bildsignal: 1500–2300 Hz (schattiert)\nHilfslinien zeigen die Sollfrequenzen vor AFC; Frequenz am Funkgerät fein abstimmen." :
         "Empfangsaudio vor AFC und AGC · 0–4000 Hz\nGrün: erkannter Pilot · Fläche: Pilotsuche 20–900 Hz\nGelb: Datenband · Konstellation: empfangene I/Q-Symbole");
     status_ = {}; status_.modulation = mode; status_.state = message; points_.clear(); waterfall_.clear(); waterfallBinHz_ = 0;
     automaticMinDb_ = -90; automaticMaxDb_ = -20; autoLevel_.reset();
@@ -74,7 +74,8 @@ void ReceiveMonitor::paintEvent(QPaintEvent*) {
     auto font = QFontDatabase::systemFont(QFontDatabase::FixedFont); font.setPointSize(8); p.setFont(font);
     const bool analog = isSstv(status_.modulation);
     const double minDb = minDb_, maxDb = maxDb_;
-    const double constellationWidth = analog ? 0 : std::min({height() + 6.0, 160.0, width() * .28});
+    const bool psk = isPskBeacon(status_.modulation);
+    const double constellationWidth = (analog || psk) ? 0 : std::min({height() + 6.0, 160.0, width() * .28});
     const double plotHeight = height() - 44;
     const QRectF spectrum(34, 24, width() - constellationWidth - 48, analog ? plotHeight * .42 : plotHeight);
     const QRectF waterfall(spectrum.left(), spectrum.bottom() + 4, spectrum.width(), analog ? plotHeight - spectrum.height() - 4 : 0);
@@ -88,7 +89,7 @@ void ReceiveMonitor::paintEvent(QPaintEvent*) {
         p.drawText(QRectF(8, 4, spectrum.right() - 8, 20), Qt::AlignRight | Qt::AlignVCenter, QString("%1 dBFS").arg(status_.level, 0, 'f', 1));
     if (analog) {
         p.fillRect(QRectF(x(1500), spectrum.top(), x(2300) - x(1500), spectrum.height()), QColor(20, 49, 49));
-    } else {
+    } else if (!psk) {
         p.drawText(QRectF(constellation.left() + 4, 4, constellation.width(), 20), Qt::AlignLeft | Qt::AlignVCenter, QString::fromLatin1(modulationName(status_.modulation)));
         p.fillRect(QRectF(x(20), spectrum.top(), x(900) - x(20), spectrum.height()), QColor(20, 49, 49));
     }
@@ -123,7 +124,7 @@ void ReceiveMonitor::paintEvent(QPaintEvent*) {
         }
         append(); p.setPen(QPen(trace, 1)); p.drawPolyline(line);
         p.setPen(QPen(band, 1, Qt::DashLine));
-        if (!analog) for (const auto edge : {status_.center - parameters(status_.modulation).halfBandwidthHz(), status_.center + parameters(status_.modulation).halfBandwidthHz()})
+        if (!analog) for (const auto edge : {status_.center - (psk ? 800 : parameters(status_.modulation).halfBandwidthHz()), status_.center + (psk ? 800 : parameters(status_.modulation).halfBandwidthHz())})
             p.drawLine(QPointF(x(edge), spectrum.top()), QPointF(x(edge), spectrum.bottom()));
     }
     if (analog) {
@@ -186,6 +187,7 @@ void ReceiveMonitor::paintEvent(QPaintEvent*) {
         p.drawText(QRectF(0, waterfall.bottom() - 14, 30, 14), Qt::AlignRight | Qt::AlignVCenter, "−6 s");
         return;
     }
+    if (psk) return;
     const auto origin = constellation.center();
     const double radius = std::min(constellation.width(), constellation.height()) * .46;
     p.setPen(grid);

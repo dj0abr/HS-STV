@@ -1,5 +1,6 @@
 /build*/
 __pycache__/
 *.wav
+!/tests/data/psk-beacon/sample.wav
 /rxpic/
 /bulletins/

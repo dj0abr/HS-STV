@@ -10,6 +10,10 @@
 #include <QUrl>
 #include <QImageReader>
 #include <QProgressBar>
+#include <QPlainTextEdit>
+#include <QScrollBar>
+#include <QFontDatabase>
+#include <QGroupBox>
 #include <QAction>
 #include <QComboBox>
 #include <QCheckBox>
@@ -71,7 +75,7 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     : transmitter_(std::move(output)), settings_(settings), receiver_(std::move(input)) {
     setWindowTitle("HS-STV · Bilder senden und empfangen"); setMinimumSize(640, 440);
     const auto savedMode = settings_.value("modem/modulation", "8apsk").toString();
-    for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410, Modulation::Martin1, Modulation::Martin2, Modulation::Scottie1, Modulation::Scottie2, Modulation::MmBeacon})
+    for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410, Modulation::Martin1, Modulation::Martin2, Modulation::Scottie1, Modulation::Scottie2, Modulation::MmBeacon, Modulation::PskBeacon})
         if (savedMode == modeKey(mode)) mode_ = mode;
     overlay_ = loadTextOverlay(settings_);
     inputDevice_ = settings_.value("audio/input", systemDefaultAudioDevice).toString().toStdString();
@@ -154,7 +158,15 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     panes->addWidget(progress_, 3, 0); panes->addWidget(receiveProgress_, 3, 1);
     contentPages_->addWidget(imagePage);
     beaconView_ = new BeaconView(contentPages_);
-    contentPages_->addWidget(beaconView_); layout->addWidget(contentPages_, 1);
+    contentPages_->addWidget(beaconView_);
+    auto* pskPage = new QGroupBox("PSB-Bake · dekodierter Text", contentPages_); pskPage->setObjectName("pskBeaconPage");
+    auto* pskLayout = new QVBoxLayout(pskPage);
+    pskText_ = new QPlainTextEdit(pskPage); pskText_->setObjectName("pskBeaconText");
+    pskText_->setReadOnly(true); pskText_->setUndoRedoEnabled(false); pskText_->setMaximumBlockCount(2000);
+    auto pskFont = QFontDatabase::systemFont(QFontDatabase::FixedFont); pskFont.setPointSizeF(10); pskText_->setFont(pskFont);
+    pskText_->setLineWrapMode(QPlainTextEdit::NoWrap);
+    pskText_->setPlaceholderText("Warte auf PSK-Bakentext…\nSignalmitte im Audio etwa 1500 Hz (Suchbereich ±500 Hz).\nErste vollständige Texte nach etwa 20–40 Sekunden.");
+    pskLayout->addWidget(pskText_); contentPages_->addWidget(pskPage); layout->addWidget(contentPages_, 1);
     receiveStatistics_ = new CompactLabel(central, Qt::ElideRight); receiveStatistics_->setObjectName("receiveStatistics");
     auto statisticsFont = receiveStatistics_->font(); statisticsFont.setPointSizeF(9); receiveStatistics_->setFont(statisticsFont);
     receiveStatistics_->setText("RX · Warte auf Audiodaten"); layout->addWidget(receiveStatistics_);
@@ -192,11 +204,11 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     auto* footer = new QHBoxLayout; footer->setSpacing(8);
     status_ = new CompactLabel(central, Qt::ElideRight); status_->setObjectName("statusText"); footer->addWidget(status_, 1);
     modes_ = new QComboBox(central); modes_->setObjectName("modulation");
-    for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410, Modulation::Martin1, Modulation::Martin2, Modulation::Scottie1, Modulation::Scottie2, Modulation::MmBeacon})
-        modes_->addItem(isBeacon(mode) ? QStringLiteral("QO100 MM-Bake") : isSstv(mode) ? QString("SSTV %1").arg(modulationName(mode)) :
+    for (const auto mode : {Modulation::Apsk8, Modulation::Qpsk4410, Modulation::Martin1, Modulation::Martin2, Modulation::Scottie1, Modulation::Scottie2, Modulation::MmBeacon, Modulation::PskBeacon})
+        modes_->addItem(isPskBeacon(mode) ? QStringLiteral("PSB-Bake") : isBeacon(mode) ? QStringLiteral("QO100 MM-Bake") : isSstv(mode) ? QString("SSTV %1").arg(modulationName(mode)) :
             QString("%1 · %2 bit/s").arg(modulationName(mode)).arg(parameters(mode).bitRate()), int(mode));
     modes_->setCurrentIndex(modes_->findData(int(mode_)));
-    modes_->setToolTip("Modus für Senden und Empfang; beide Stationen gleich einstellen.\n8APSK/QPSK: HS-Modem-kompatibel mit 100-Hz-Referenzträger.\nSSTV Martin 1/2 und Scottie 1/2: 320 × 256 Pixel.\nQO100 MM-Bake: nur Empfang, 8APSK mit 7200 bit/s.");
+    modes_->setToolTip("Modus für Senden und Empfang; beide Stationen gleich einstellen.\n8APSK/QPSK: HS-Modem-kompatibel mit 100-Hz-Referenzträger.\nSSTV Martin 1/2 und Scottie 1/2: 320 × 256 Pixel.\nQO100 MM-Bake: nur Empfang, 8APSK mit 7200 bit/s.\nPSB-Bake: nur Empfang, BPSK/Manchester mit 400 bit/s; Audio-Träger etwa 1500 Hz.");
     waterfallId_ = new QCheckBox("Waterfall-ID", central); waterfallId_->setObjectName("waterfallId");
     waterfallId_->setChecked(settings_.value("transmit/waterfallId", false).toBool());
     waterfallId_->setToolTip("Vor jeder Bildsendung HS-STV und die gewählte Betriebsart als Wasserfalltext senden.\nSSTV: Kennung 10 dB über dem eingestellten Bildpegel · Digital: keine Pegelanhebung.\nDer Pegelregler wirkt auch auf die Kennung; STOP bricht die gesamte Sendung ab.");
@@ -222,6 +234,16 @@ MainWindow::MainWindow(std::unique_ptr<AudioOutput> output, QSettings& settings,
     settings_.remove("receive/enabled"); // Migrate the obsolete manual-pause preference.
     receiver_.sstvReceived = [this](const SstvUpdate& update) { receivedSstv(update); };
     receiver_.imageReceived = [this](const ReceivedImage& image) { receivedImage(image); };
+    receiver_.pskTextReceived = [this](const QString& text) {
+        auto* scroll = pskText_->verticalScrollBar();
+        const bool follow = scroll->value() >= scroll->maximum() - 1 && !pskText_->textCursor().hasSelection();
+        const int oldPosition = scroll->value(), horizontal = pskText_->horizontalScrollBar()->value();
+        const int before = pskText_->document()->isEmpty() ? 0 : pskText_->document()->blockCount();
+        pskText_->appendPlainText(text.trimmed());
+        if (follow) scroll->setValue(scroll->maximum());
+        else scroll->setValue(std::max(0, oldPosition - std::max(0, before + text.trimmed().count('\n') + 1 - pskText_->document()->blockCount())));
+        pskText_->horizontalScrollBar()->setValue(horizontal);
+    };
     receiver_.beaconMessageReceived = [this](const BeaconMessage& message) { beaconView_->appendMessage(message); };
     receiver_.bulletinReceived = [this](const Bulletin& bulletin) { beaconView_->showBulletin(bulletin); };
     receiver_.bulletinProgressChanged = [this](const BulletinProgress& progress) { beaconView_->showBulletinProgress(progress); };
@@ -261,8 +283,8 @@ bool MainWindow::deviceAvailable() const {
 }
 void MainWindow::updateButton() {
     const bool running = transmitter_.running();
-    const bool beacon = isBeacon(mode_);
-    contentPages_->setCurrentIndex(beacon ? 1 : 0);
+    const bool beacon = isReceiveOnly(mode_);
+    contentPages_->setCurrentIndex(isPskBeacon(mode_) ? 2 : isBeacon(mode_) ? 1 : 0);
     start_->setText(running ? "STOP" : "Senden");
     start_->setEnabled(!beacon && (running || (!deviceScan_.valid() && deviceAvailable() && (image_.has_value() || bool(sstvImage_)))));
     overlayEdit_->setEnabled(!running); overlayAction_->setEnabled(!running); overlaySlots_->setEnabled(!running);
@@ -272,7 +294,8 @@ void MainWindow::updateButton() {
     overlayAction_->setEnabled(!running && !beacon);
 }
 void MainWindow::showReady() {
-    if (isBeacon(mode_)) status_->setText("QO100 MM-Bake · 8APSK · 7200 bit/s · nur Empfang");
+    if (isPskBeacon(mode_)) status_->setText("PSB-Bake · BPSK/Manchester · 400 bit/s · nur Empfang");
+    else if (isBeacon(mode_)) status_->setText("QO100 MM-Bake · 8APSK · 7200 bit/s · nur Empfang");
     else if (deviceAvailable()) status_->setText("Bereit · " + (device_ == systemDefaultAudioDevice ? QStringLiteral("System-Standard") : QString::fromStdString(device_)) + " · " + QString::number(level_) + " %");
     else status_->setText("Ausgang „" + QString::fromStdString(device_) + "“ nicht verfügbar. Bitte unter Setup auswählen oder aktualisieren.");
     updateButton();
@@ -328,7 +351,7 @@ void MainWindow::retryJpegSaves() {
     }
 }
 void MainWindow::toggle() {
-    if (isBeacon(mode_)) return;
+    if (isReceiveOnly(mode_)) return;
     if (transmitter_.running()) { transmitter_.stop(); showReady(); return; }
     try {
         if (isSstv(mode_)) {
@@ -365,7 +388,7 @@ void MainWindow::chooseImage() {
     if (!path.isEmpty()) loadImage(path);
 }
 bool MainWindow::loadImage(const QString& filename) {
-    if (transmitter_.running() || isBeacon(mode_)) return false;
+    if (transmitter_.running() || isReceiveOnly(mode_)) return false;
     QImageReader reader(filename); reader.setAutoTransform(true);
     const auto size = reader.size();
     if (size.isValid() && qint64(size.width()) * size.height() > 40000000) {
@@ -378,7 +401,7 @@ bool MainWindow::loadImage(const QString& filename) {
 }
 void MainWindow::prepare() {
     image_.reset(); sstvImage_.reset(); progress_->setValue(0);
-    if (isBeacon(mode_)) { showReady(); return; }
+    if (isReceiveOnly(mode_)) { showReady(); return; }
     if (original_.isNull()) { updateButton(); return; }
     const double idSeconds = waterfallId_->isChecked() ? double(waterfallIdSamples(mode_)) / modeSampleRate(mode_) : 0;
     try {
@@ -459,7 +482,7 @@ void MainWindow::restoreDisplayRange() {
     syncDisplayRange(); saveDisplayRange();
 }
 void MainWindow::receivedImage(const ReceivedImage& image) {
-    if (isBeacon(mode_)) return;
+    if (isReceiveOnly(mode_)) return;
     if (image.newImage) {
         archiveSstv(); receivedSstv_ = {}; receivedRows_.reset(); receivedJpeg_.clear(); previewJpeg_.clear(); receivePreview_->setImage({});
     }
@@ -526,6 +549,12 @@ void MainWindow::showReceiveStatistics(const ReceiveStatus& status) {
             "Im Freilauf dargestellte Zeilen ohne bestätigten Sync zählen als nicht erkannt.\n"
             "Bei VIS-Empfang werden am Bildende alle 256 erwarteten Zeilensyncs berücksichtigt;\n"
             "beim Teileinstieg ohne VIS nur die seit dem Einstieg ausgewerteten Zeilen.");
+    } else if (isPskBeacon(status.modulation)) {
+        receiveStatistics_->setText(QString("RX · %1 · Träger %2 Hz · OK %3 · FEC korr. %4")
+            .arg(status.locked ? QStringLiteral("Sync") : status.state).arg(status.center, 0, 'f', 1)
+            .arg(qulonglong(status.frames)).arg(qulonglong(status.fecCorrectedFrames)));
+        receiveStatistics_->setToolTip("Nur CRC-/RS-geprüfte Rahmen. Überlappende Empfangsfenster werden zusammengeführt.\n"
+            "BPSK/Manchester · 400 bit/s · erster Text nach 20–40 s · kein Pilotton erforderlich.");
     } else {
         const auto prefix = isBeacon(status.modulation) ? QString("RX · %1").arg(status.locked ? QStringLiteral("Sync") : status.state) : QStringLiteral("RX");
         receiveStatistics_->setText(prefix + QString(" · AFC %1 Hz · OK %2 · CRC %3 · FEC korr. %4")
@@ -601,7 +630,7 @@ void MainWindow::setup() {
     populate();
     const bool running = transmitter_.running(); outputs->setEnabled(!running); refresh->setEnabled(!running);
     layout->addLayout(form);
-    const auto description = isBeacon(mode_) ? QStringLiteral("48 kHz · Mono · 8APSK 7200 bit/s · nur Empfang\n"
+    const auto description = isPskBeacon(mode_) ? QStringLiteral("48 kHz · Mono · BPSK/Manchester 400 bit/s · nur Empfang\nSignalmitte etwa 1500 Hz, automatische Trägersuche ±500 Hz.\nErste vollständige Texte nach 20–40 Sekunden; kein Pilotton erforderlich.") : isBeacon(mode_) ? QStringLiteral("48 kHz · Mono · 8APSK 7200 bit/s · nur Empfang\n"
         "Audioeingang auf die Bake abstimmen; vollständiges Signal samt Pilot erfassen.\n"
         "System-Standard wird beim Öffnen des Audiostreams aufgelöst.") :
         isSstv(mode_) ? QString("48 kHz · Mono · SSTV %1 · 320 × 256 Pixel\n100 % = angepasster SSTV-Maximalpegel (−12,5 dBFS Spitze).\nSync 1200 Hz · Bildsignal 1500–2300 Hz.").arg(modulationName(mode_)) :

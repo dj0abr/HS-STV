@@ -232,3 +232,17 @@ Abschnitte 4.3.7/4.3.9/4.3.12/4.3.16, und verwendet die dokumentierten
 [zlib-Schnittstellen](https://zlib.net/manual.html). zlib bleibt eine externe
 Bibliothek, eingebunden über CMake `ZLIB::ZLIB`. Die ursprünglichen Python-,
 HTTP- und SQLite-Laufzeitkomponenten werden nicht eingebunden.
+
+## PSK-Bake: nativer Dekoder
+
+`external/qo100-psk` übernimmt den vorhandenen C++-Dekoder aus QO100_TRX2.
+Herkunft, Revisionen und Änderungen stehen in
+[ORIGIN.md](../external/qo100-psk/ORIGIN.md). Die übernommenen Komponenten sind
+GPL-3.0-only; ihre SPDX-Hinweise und vollständige Lizenz bleiben erhalten.
+Der damit verknüpfte Dekoder wird unter GPL v3 vertrieben.
+Die neue Soundkarten-, Prozess- und Qt-Anbindung ist GPL-3.0-or-later.
+
+Es wird keine Python-Laufzeit für die PSK-Bake eingebunden. FFTW wird durch die
+vorhandene liquid-dsp-Bibliothek ersetzt. Die Prüfung vergleicht alle Nutzlasten
+mit QO100_TRX2 sowie unabhängigen GNU-Radio/gr-satellites-FEC-Vektoren.
+Details: [PSK-BAKE.md](PSK-BAKE.md).

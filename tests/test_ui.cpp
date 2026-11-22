@@ -4,6 +4,7 @@
 #include "receive_monitor.hpp"
 #include "overlay_editor.hpp"
 #include "bulletin_archive.hpp"
+#include "psk_fixture.hpp"
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
@@ -555,6 +556,48 @@ private slots:
         MainWindow window(std::make_unique<FakeOutput>(state), settings); QVERIFY(window.loadImage(picture(dir)));
         QVERIFY(!window.findChild<QPushButton*>("transmitButton")->isEnabled());
         QCOMPARE(state.starts, 0u);
+    }
+    void pskBeaconCannotTransmit() {
+        State state; Transmitter tx(std::make_unique<FakeOutput>(state));
+        QVERIFY_EXCEPTION_THROWN(TxModulator(Modulation::PskBeacon), std::invalid_argument);
+        QVERIFY_EXCEPTION_THROWN(waterfallIdText(Modulation::PskBeacon), std::invalid_argument);
+        QVERIFY_EXCEPTION_THROWN(tx.startTest("other", false, Modulation::PskBeacon), std::invalid_argument);
+        ImageTransmission image; image.modulation = Modulation::PskBeacon;
+        QVERIFY_EXCEPTION_THROWN(tx.startImage("other", image), std::invalid_argument);
+        QCOMPARE(state.starts, 0u);
+    }
+    void pskBeaconReceivesTextAndRestoresOtherModes() {
+        QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state; CaptureState capture;
+        MainWindow window(std::make_unique<FakeOutput>(state), settings, std::make_unique<FakeCapture>(capture)); window.resize(900, 620); window.show();
+        QTRY_VERIFY(capture.open); QVERIFY(window.loadImage(picture(dir)));
+        auto* modes = window.findChild<QComboBox*>("modulation");
+        const int index = modes->findData(int(Modulation::PskBeacon)); QVERIFY(index >= 0); modes->setCurrentIndex(index);
+        QCOMPARE(modes->currentText(), QString("PSB-Bake")); QCOMPARE(capture.sampleRate, 48000u);
+        QCOMPARE(settings.value("modem/modulation").toString(), QString("psk-beacon"));
+        QVERIFY(window.findChild<QWidget*>("pskBeaconPage")->isVisible());
+        QVERIFY(!window.findChild<QWidget*>("imagePreview")->isVisible());
+        QVERIFY(!window.findChild<QWidget*>("beaconPage")->isVisible());
+        auto* send = window.findChild<QPushButton*>("transmitButton"); QVERIFY(!send->isEnabled());
+        QVERIFY(!window.findChild<QCheckBox*>("waterfallId")->isEnabled());
+        QVERIFY(!window.findChild<QAction*>("openImage")->isEnabled()); QVERIFY(!window.loadImage(picture(dir)));
+        const auto audio = psk_test::audio48(psk_test::wave(QString::fromUtf8(MM_SSTV_PSK_DATA) + "/sample.wav"), 40);
+        for (std::size_t at = 0; at < audio.size(); at += 4800) {
+            capture.consume(audio.data() + at, std::min(std::size_t(4800), audio.size() - at)); QTest::qWait(3);
+        }
+        auto* text = window.findChild<QPlainTextEdit*>("pskBeaconText"); QVERIFY(text);
+        QTRY_VERIFY_WITH_TIMEOUT(text->toPlainText().contains("CRC OK"), 10000);
+        QTRY_VERIFY_WITH_TIMEOUT(text->toPlainText().contains("FEC/RS OK"), 10000);
+        QVERIFY(text->toPlainText().contains('\n')); QVERIFY(text->isReadOnly()); QCOMPARE(state.starts, 0u);
+        QVERIFY(window.findChild<QLabel*>("receiveStatistics")->text().contains("RX · Sync"));
+        if (qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT")) QVERIFY(window.grab().save(qEnvironmentVariable("MM_SSTV_SCREENSHOT") + ".psk.png"));
+        const auto received = text->toPlainText();
+        modes->setCurrentIndex(modes->findData(int(Modulation::MmBeacon))); QVERIFY(window.findChild<QWidget*>("beaconPage")->isVisible());
+        modes->setCurrentIndex(modes->findData(int(Modulation::PskBeacon))); QCOMPARE(text->toPlainText(), received);
+        modes->setCurrentIndex(0); QVERIFY(window.findChild<QWidget*>("imagePreview")->isVisible()); QVERIFY(send->isEnabled());
+        QVERIFY(window.findChild<QCheckBox*>("waterfallId")->isEnabled()); QCOMPARE(state.starts, 0u);
+        settings.setValue("modem/modulation", "psk-beacon");
+        MainWindow restored(std::make_unique<FakeOutput>(state), settings);
+        QCOMPARE(restored.findChild<QComboBox*>("modulation")->currentText(), QString("PSB-Bake"));
     }
     void beaconMessagesArriveThroughReceiverAndRestoreImageMode() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state; CaptureState capture;

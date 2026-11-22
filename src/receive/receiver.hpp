@@ -51,6 +51,7 @@ public:
     std::function<void(const ReceivedImage&)> imageReceived;
     std::function<void(const SstvUpdate&)> sstvReceived;
     std::function<void(const BeaconMessage&)> beaconMessageReceived;
+    std::function<void(const QString&)> pskTextReceived;
     std::function<void(const Bulletin&)> bulletinReceived;
     std::function<void(const BulletinProgress&)> bulletinProgressChanged;
     std::function<void()> bulletinArchiveChanged;

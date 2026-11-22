@@ -118,6 +118,16 @@ Listen enthalten jeweils höchstens 1000 Einträge. Beim Zurückscrollen bleibt 
 Leseposition auch bei neuen Meldungen erhalten.
 [Testanleitung und weitere Stufen](docs/MM-BAKE.md).
 
+## PSB-Bake – PSK-Bakentext
+
+**PSB-Bake** empfängt die QO-100-PSK-Bake als **BPSK/Manchester mit 400 bit/s**.
+Anstelle der Bilder erscheint ein großes Textfenster, darunter das Audiospektrum.
+Verwendet wird der unter **Setup → Soundkarten…** gewählte Eingang. Die Signalmitte
+soll im Audio etwa **1500 Hz** betragen; die automatische Trägersuche umfasst
+±500 Hz. Erste geprüfte Texte erscheinen nach etwa **20–40 Sekunden**.
+Senden und Waterfall-ID sind in diesem Modus deaktiviert.
+[Bedienung, Technik und Tests](docs/PSK-BAKE.md).
+
 ## SSTV Martin 1/2 und Scottie 1/2
 
 Alle vier SSTV-Modi sind im selben Modusfeld auswählbar und verwenden fest

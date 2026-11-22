@@ -12,6 +12,7 @@
 #include <QElapsedTimer>
 #include <QPointer>
 class QLabel;
+class QPlainTextEdit;
 class QPushButton;
 class QComboBox;
 class QCheckBox;
@@ -114,6 +115,7 @@ private:
     QStackedWidget* contentPages_ = nullptr;
     QPointer<BulletinDialog> bulletinDialog_;
     BeaconView* beaconView_ = nullptr;
+    QPlainTextEdit* pskText_ = nullptr;
     QAction* open_ = nullptr;
 };
 }

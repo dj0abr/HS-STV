@@ -29,11 +29,11 @@ void Receiver::start(const std::string& device, Modulation mode) {
     const auto sampleRate = modeSampleRate(mode); mode_ = mode;
     if (!input_) throw std::runtime_error("Kein Audioeingang vorhanden");
     if (device.empty()) throw std::runtime_error("Kein Audioeingang gewählt");
-    QString executable = QCoreApplication::applicationDirPath() + (isSstv(mode_) ? "/hs-stv-sstv-rx-core" : "/hs-stv-rx-core");
+    QString executable = QCoreApplication::applicationDirPath() + (isPskBeacon(mode_) ? "/hs-stv-psk-rx-core" : isSstv(mode_) ? "/hs-stv-sstv-rx-core" : "/hs-stv-rx-core");
 #ifdef Q_OS_WIN
     executable += ".exe";
 #endif
-    if (!QFileInfo(executable).isExecutable()) throw std::runtime_error("Empfangskern hs-stv-rx-core fehlt. Bitte neu bauen.");
+    if (!QFileInfo(executable).isExecutable()) throw std::runtime_error("Empfangskern fehlt: " + executable.toStdString() + ". Bitte neu bauen.");
     lines_.clear(); core_.start(executable, {"--input-rate", QString::number(sampleRate), "--monitor", "--modulation", QString::fromLatin1(modeKey(mode_))});
     if (!core_.waitForStarted(1000)) throw std::runtime_error(core_.errorString().toStdString());
     accepting_ = true; active_ = true; stale_ = false; statusAge_.start();
@@ -130,7 +130,7 @@ void Receiver::readOutput() {
                     status.points.push_back({float(x), float(y)});
             }
             const auto state = json.value("afc_state").toString();
-            status.state = isSstv(mode_) ? (status.locked ? "Zeilensynchron" : json.value("receiving").toBool() ? "Bildempfang · Freilauf" : "Suche SSTV") : status.locked ? "Synchronisiert" : state == "acquiring" ? "Pilot gefunden · synchronisiere" : state == "hold" ? "Nachführung" : "Suche";
+            status.state = isPskBeacon(mode_) ? (status.locked ? "Synchronisiert" : json.value("decode_state").toString("Sammle Audio · erster Text nach 20–40 s")) : isSstv(mode_) ? (status.locked ? "Zeilensynchron" : json.value("receiving").toBool() ? "Bildempfang · Freilauf" : "Suche SSTV") : status.locked ? "Synchronisiert" : state == "acquiring" ? "Pilot gefunden · synchronisiere" : state == "hold" ? "Nachführung" : "Suche";
             if (statusChanged) statusChanged(status);
         } else if (event.startsWith("sstv_") && isSstv(mode_)) {
             SstvUpdate update; update.modulation = mode_;
@@ -145,7 +145,12 @@ void Receiver::readOutput() {
                 std::copy(rgb.begin(), rgb.end(), update.rgb.begin());
             } else continue;
             if (sstvReceived) sstvReceived(update);
-        } else if (event == "frame") {
+        } else if (event == "psk_text" && isPskBeacon(mode_)) {
+            const auto hex = json.value("text_hex").toString().toLatin1();
+            if (hex.isEmpty() || hex.size() > 8192 || hex.size() % 2) continue;
+            const auto text = QString::fromUtf8(QByteArray::fromHex(hex));
+            if (pskTextReceived) pskTextReceived(text);
+        } else if (event == "frame" && !isPskBeacon(mode_)) {
             const auto hex = json.value("payload_hex").toString().toLatin1(); if (hex.size() != 438) continue;
             const auto payload = QByteArray::fromHex(hex); if (payload.size() != 219) continue;
             ReceivedFrame frame; frame.type = json.value("frame_type").toInt(-1); frame.counter = json.value("frame_number").toInt(-1); frame.status = json.value("frame_info").toInt(-1);
