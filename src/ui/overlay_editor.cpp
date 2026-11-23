@@ -48,7 +48,11 @@ QPointF OverlayPreview::imagePoint(QPointF point) const {
 }
 void OverlayPreview::selectLayer(int index) { layer_ = std::clamp(index, 0, 2); update(); }
 void OverlayPreview::paintEvent(QPaintEvent*) {
-    QPainter painter(this); painter.fillRect(rect(), QColor("#26323b")); const auto area = imageRect();
+    QPainter painter(this); painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(QColor("#344a60")); painter.setBrush(QColor("#101822"));
+    painter.drawRoundedRect(QRectF(rect()).adjusted(.5, .5, -.5, -.5), 8, 8);
+    painter.setBrush(Qt::NoBrush);
+    const auto area = imageRect();
     painter.setRenderHint(QPainter::SmoothPixmapTransform); painter.drawImage(area, drawTextOverlay(base_, overlay_));
     const auto box = overlayGeometry(overlay_, base_.size())[layer_].bounds;
     if (!box.isEmpty()) {

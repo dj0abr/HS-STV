@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "main_window.hpp"
+#include "theme.hpp"
 #include <QApplication>
 #include <QSettings>
 #include <iostream>
@@ -15,6 +16,7 @@ int main(int argc, char** argv) {
             return 0;
         }
         QApplication app(argc, argv);
+        mm_sstv::applyDarkTheme(app);
         QCoreApplication::setOrganizationName("HS-STV"); QCoreApplication::setApplicationName("HS-STV");
         QCoreApplication::setApplicationVersion(QString::fromLatin1(MM_SSTV_VERSION));
         QSettings settings;

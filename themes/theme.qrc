@@ -1,0 +1,10 @@
+<RCC>
+    <qresource prefix="/theme">
+        <file>dark.qss</file>
+        <file>icons/check.png</file>
+        <file>icons/menu-check.png</file>
+        <file>icons/down.png</file>
+        <file>icons/up.png</file>
+        <file>icons/right.png</file>
+    </qresource>
+</RCC>
