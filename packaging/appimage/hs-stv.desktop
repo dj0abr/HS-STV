@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=HS-STV
+GenericName=QO-100 image transfer and beacon monitor
+GenericName[de]=QO-100 Bilduebertragung und Bakenmonitor
+Comment=Send and receive images, monitor the QO-100 beacons
+Comment[de]=Bilder senden und empfangen, QO-100-Baken empfangen
+Exec=hs-stv
+Icon=hs-stv
+Terminal=false
+Categories=AudioVideo;Audio;HamRadio;
+Keywords=QO100;SSTV;Amateur Radio;Beacon;

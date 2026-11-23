@@ -310,6 +310,105 @@ Die Senderimplementierung bindet keine Schifra-Bibliothek ein; der übernommene
 Empfangskern verwendet den originalen Schifra-Decoder. Bild- und Testdaten
 laufen durch denselben Modulationskern mit den Parametern des gewählten Modus.
 
+### Linux-AppImage fuer PC und ARM64
+
+Fertige Pakete stehen unter [Releases](https://github.com/dj0abr/HS-STV/releases/latest)
+zum Download bereit: `HS-STV-1.0.0-x86_64.AppImage` fuer PCs und
+`HS-STV-1.0.0-aarch64.AppImage` fuer ARM64, beispielsweise den Raspberry Pi 4
+mit einem 64-Bit-Betriebssystem. Auf dem Zielsystem wird glibc 2.35 oder neuer
+benoetigt; Raspberry Pi OS Bookworm und Trixie in der 64-Bit-Version erfuellen
+diese Voraussetzung. Die heruntergeladene Datei ausfuehrbar machen und starten,
+zum Beispiel fuer den PC:
+
+```bash
+chmod +x HS-STV-1.0.0-x86_64.AppImage
+./HS-STV-1.0.0-x86_64.AppImage
+```
+
+Fuer ARM64 den Dateinamen entsprechend ersetzen. Unter den Release-Downloads
+liegen auch SHA-256-Pruefsummen und Informationen zur jeweiligen Buildumgebung.
+Die folgenden Schritte beschreiben den eigenen Build.
+
+Die gemeinsame Quellbasis bleibt `/Daten/funk/sat/hs-stv`. Auf dem PC bzw. in
+der Linux-VM und auf dem ARM64-Rechner wird jeweils dasselbe Skript aufgerufen:
+
+```bash
+cd /Daten/funk/sat/hs-stv
+./build-appimage.sh
+```
+
+Die Architektur wird automatisch erkannt. Explizite Aufrufe sind ebenfalls
+moeglich; eine falsche Architektur wird vor dem Bau abgewiesen:
+
+```bash
+./build-appimage.sh --arch x86_64           # PC / Mint-VM
+./build-appimage.sh --arch aarch64 --jobs 2 # ARM64, z.B. Raspberry Pi mit 64-Bit-Linux
+```
+
+Das ist ein nativer Build, kein Crosscompiler. Fuer die Release-Dateien ist
+Linux Mint 21.x / Ubuntu 22.04 mit glibc 2.35 als Build-Basis vorgesehen.
+Normale Sicherheitsupdates dieser Distributionen koennen installiert werden.
+Die Entwicklungstools aus `./prepare.sh` werden benoetigt; weitere erforderliche
+Pakete und Optionen zeigt `./build-appimage.sh --help`.
+
+Der eingerichtete Debian-12-ARM64-Buildrechner hat bereits glibc 2.36. Dort
+liegt deshalb unter `~/.cache/hs-stv-sdk/ubuntu22.04-aarch64/` eine isolierte
+Ubuntu-22.04-Buildumgebung mit glibc 2.35, GCC 11 und Qt 5.15.3. Der erneute
+ARM-Build wird auf diesem Rechner so gestartet:
+
+```bash
+"$HOME/.cache/hs-stv-sdk/ubuntu22.04-aarch64/run-in-sdk" \
+  /bin/bash -c 'cd /Daten/funk/sat/hs-stv && ./build-appimage.sh --arch aarch64 --jobs 2'
+```
+
+Dieser Aufruf setzt die bereits eingerichtete SDK-Umgebung und freigegebene
+User-Namespaces voraus. Sie laeuft ohne System-Rootrechte und bindet das
+gemeinsame Projekt unter demselben Pfad ein; die HS-STV-Quellen werden nicht
+kopiert. Das Debian-System und dessen Bibliotheken bleiben unveraendert.
+
+Das Skript baut liquid-dsp 1.8.3 aus festgelegten Quellen sowie HS-STV komplett
+neu. Es verwendet die gemeinsame HS-STV-Quellbasis direkt, ohne eine zweite
+Projektkopie. CMake-Caches, Compilerergebnisse, liquid-dsp-Installation, Werkzeuge,
+AppDir, Logdatei und fertige Pakete sind nach Architektur getrennt:
+
+```text
+build-appimage/
+  cache/                  gemeinsame, gepruefte liquid-dsp-Quellen
+  x86_64/
+    hs-stv/ liquid-build/ liquid-install/ tools/ AppDir/ build.log
+    output/HS-STV-1.0.0-x86_64.AppImage
+  aarch64/
+    hs-stv/ liquid-build/ liquid-install/ tools/ AppDir/ build.log
+    output/HS-STV-1.0.0-aarch64.AppImage
+```
+
+Die Versionsnummer wird aus CMake gelesen. Neben der AppImage entstehen eine
+SHA-256-Pruefsumme und Build-Informationen. Ein erneuter Aufruf verwirft nur die
+generierten Build-Verzeichnisse der gewaehlten Architektur; die andere
+Architektur, die normalen Linux-/Windows-Builds und der letzte erfolgreiche
+Download bleiben erhalten. Gleichzeitige Aufrufe derselben Architektur werden
+durch eine Sperre verhindert. Downloads werden anhand festgelegter SHA-256-Werte
+geprueft und wiederverwendet; beim ersten Aufruf ist Internetzugang erforderlich.
+
+Enthalten sind die GUI mit Dark-Style, die drei Empfangskerne, die Signalwerkzeuge,
+Qt 5 mit Plattform- und Bildformat-Plugins fuer X11/XWayland und Wayland sowie
+deutsche Qt-Uebersetzungen und weitere Laufzeitbibliotheken. Fuer Wayland werden
+auch die Plugins fuer Fensterdekoration, Shell und Grafikintegration mitgeliefert;
+`qtwayland5` wird auf dem Buildrechner benoetigt. Die GNU-libc und die Grafik-/
+Audiodienste werden vom Zielsystem bereitgestellt. Ein laufender X11- oder
+Wayland-Desktop und ein PulseAudio- oder PipeWire-Pulse-Server werden vorausgesetzt.
+Die Werkzeuge koennen auch ohne FUSE paketieren. Ein Start ohne FUSE ist mit
+`--appimage-extract-and-run` moeglich.
+
+Der Starter legt `rxpic` und `bulletins` unter
+`${XDG_DATA_HOME:-$HOME/.local/share}/HS-STV/` ab, nicht im schreibgeschuetzten
+AppImage. Die bisherigen Archive im Projektverzeichnis bleiben erhalten.
+
+Fuer einen lokalen Test auf einem neueren Linux gibt es
+`./build-appimage.sh --allow-newer-glibc`. Diese Datei wird mit `-development`
+gekennzeichnet und ersetzt keinen fuer Mint 21 gebauten Release. ARM64 muss
+zusaetzlich auf der Zielhardware geprueft werden.
+
 ### Windows 11 (x64)
 
 Die fertige Windows-Version steht unter [Releases](https://github.com/dj0abr/HS-STV/releases/latest)

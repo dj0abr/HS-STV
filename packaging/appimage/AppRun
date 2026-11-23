@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# linuxdeploy wraps this launcher with the Qt plugin's environment hooks.
+set -e
+app_dir="${APPDIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)}"
+export APPDIR="$app_dir"
+data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/HS-STV"
+mkdir -p -- "$data_dir"
+cd -- "$data_dir"
+exec "$app_dir/usr/bin/hs-stv" "$@"

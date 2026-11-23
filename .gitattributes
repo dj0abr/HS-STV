@@ -1,3 +1,8 @@
 /build-windows.sh text eol=lf
 /package-windows.sh text eol=lf
 /external/liquid-dsp-1.8.3/windows-timer.patch text eol=lf
+/build-appimage.sh text eol=lf
+/packaging/appimage/AppRun text eol=lf
+/packaging/appimage/tools.lock text eol=lf
+/packaging/appimage/*.desktop text eol=lf
+/packaging/appimage/*.svg text eol=lf
