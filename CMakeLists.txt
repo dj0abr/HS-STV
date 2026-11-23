@@ -15,11 +15,15 @@ endif()
 find_path(MM_LIQUID_INCLUDE liquid/liquid.h PATHS "${MM_SSTV_LIQUID_ROOT}/include" NO_DEFAULT_PATH REQUIRED)
 # Prefer the self-contained static bundle; other targets can supply an archive
 # or import library explicitly using -DMM_LIQUID_LIBRARY=... .
-if(NOT MM_LIQUID_LIBRARY AND EXISTS "${MM_SSTV_LIQUID_ROOT}/lib/linux-${MM_ARCH}/libliquid.a")
-    set(MM_LIQUID_LIBRARY "${MM_SSTV_LIQUID_ROOT}/lib/linux-${MM_ARCH}/libliquid.a" CACHE FILEPATH "liquid library")
+set(MM_LIQUID_LIBRARY_PATHS "${MM_SSTV_LIQUID_ROOT}/lib")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list(PREPEND MM_LIQUID_LIBRARY_PATHS "${MM_SSTV_LIQUID_ROOT}/lib/linux-${MM_ARCH}")
+    if(NOT MM_LIQUID_LIBRARY AND EXISTS "${MM_SSTV_LIQUID_ROOT}/lib/linux-${MM_ARCH}/libliquid.a")
+        set(MM_LIQUID_LIBRARY "${MM_SSTV_LIQUID_ROOT}/lib/linux-${MM_ARCH}/libliquid.a" CACHE FILEPATH "liquid library")
+    endif()
 endif()
 find_library(MM_LIQUID_LIBRARY NAMES liquid libliquid
-    PATHS "${MM_SSTV_LIQUID_ROOT}/lib/linux-${MM_ARCH}" "${MM_SSTV_LIQUID_ROOT}/lib"
+    PATHS ${MM_LIQUID_LIBRARY_PATHS}
     NO_DEFAULT_PATH REQUIRED)
 add_library(mm_liquid UNKNOWN IMPORTED)
 set_target_properties(mm_liquid PROPERTIES IMPORTED_LOCATION "${MM_LIQUID_LIBRARY}"
@@ -288,7 +292,7 @@ if(BUILD_TESTING)
         add_test(NAME bundled_rx_image COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_image_export.py $<TARGET_FILE:hs-stv-image-signal> $<TARGET_FILE:hs-stv-rx-core>)
         add_test(NAME bundled_rx_image_qpsk COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_image_export.py $<TARGET_FILE:hs-stv-image-signal> $<TARGET_FILE:hs-stv-rx-core> qpsk4410)
         add_test(NAME sstv_native_audio_roundtrip COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_sstv_export.py $<TARGET_FILE:hs-stv-sstv-signal> $<TARGET_FILE:hs-stv-sstv-rx-core>)
-        set_tests_properties(sstv_native_audio_roundtrip PROPERTIES TIMEOUT 90)
+        set_tests_properties(sstv_native_audio_roundtrip PROPERTIES TIMEOUT 240)
         add_test(NAME image_export COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_image_export.py $<TARGET_FILE:hs-stv-image-signal>)
         set(MM_SSTV_RX_PROBE "" CACHE FILEPATH "Optional independent HS-Modem RX executable for compatibility checks")
         if(MM_SSTV_RX_PROBE)

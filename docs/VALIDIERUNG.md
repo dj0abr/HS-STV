@@ -102,7 +102,22 @@ Soundkarte, SDR und Satelliten. Die vereinbarte Abnahme bleibt der Empfang über
 QO100 in der vorhandenen HS-Modem-Installation bei **8APSK 7200 bit/s** mit
 sauberer Konstellation und 100-Hz-Referenz.
 
-Der Windows-/macOS-PortAudio-Adapter und die CMake-Auswahl sind vorbereitet;
-auf diesen Betriebssystemen wurde noch kein Build oder Laufzeittest durchgeführt.
-Die PortAudio-Geräteauswahl verwendet Host-API und Gerätename und verweigert bei
-doppeldeutigen Namen den Start. Der Linux-Adapter adressiert Sinks direkt nach ID.
+## Windows 11 x64 mit USB Audio CODEC
+
+Der native Release-Build verwendet MSYS2 UCRT64 mit Qt 6 und PortAudio.
+Der Start aus dem Paket wurde mit einem Windows-System-`PATH` geprüft,
+einschließlich der drei Empfangsprogramme. Build und Paketierung stehen in
+der [README](../README.md).
+
+| Prüfung | Ergebnis auf dem Testrechner |
+|---|---|
+| Automatisierte Windows-Tests | 28 von 28 CTest-Tests bestanden, einschließlich der Qt-Empfangsbrücke und aller vier SSTV-Profile. Der separate GUI-Test bestand auch mit Leerzeichen und Umlaut im temporären Archivpfad. |
+| USB-Aufnahme und Ausgabe digitaler Stille über MME und WDM-KS | Beide Richtungen bei 44,1 und 48 kHz. Bei der Ausgabe wurden keine Unterläufe gemeldet. |
+| USB-Audio über WASAPI | 48 kHz in beiden Richtungen. 44,1 kHz wurde in der aktuellen Gerätekonfiguration abgelehnt. |
+| USB-Codec abziehen und wieder anschließen | Der ausdrücklich gewählte MME-Ein- und Ausgang wurde als nicht verfügbar gemeldet. Nach dem Wiederanschließen waren beide Richtungen erneut nutzbar. |
+| QO-100-MM-Bake über Funkgerät und USB-Audio, 8APSK 7200 bit/s | 225 gültige Frames in 150 Sekunden. Pilot am Ende 377,7 Hz, Synchronisation in 1099 von 1500 Statusmeldungen. Der Framezähler stieg über die gesamte Aufnahme. |
+| 8APSK-Testbild über den vorhandenen Rückhörweg | Ausgabe bei 20 % Pegel ohne Pufferunterläufe. Ohne Wasserfall-ID wurden im 45-Sekunden-Mitschnitt 38 gültige Frames erfasst. Alle 18 Bildblöcke ergaben ein bytegleiches JPEG mit 3802 Bytes. |
+
+Die PortAudio-Geräteauswahl verwendet Host-API und Gerätename und verweigert
+bei doppeldeutigen Namen den Start. Der Linux-Adapter adressiert Sinks direkt
+nach ID.

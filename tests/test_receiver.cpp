@@ -87,6 +87,7 @@ int main(int argc, char** argv) {
         };
         rx.start("fromQO100", mode);
         if (source->sampleRate != parameters(mode).sampleRate) throw std::runtime_error("Wrong capture rate");
+        const std::size_t statusBlock = source->sampleRate / 10;
         const auto feed = [&](const float* samples, std::size_t count) {
             // The offline producer can run >50x faster than real capture. Wait
             // for a decoded audio status instead of overrunning the bounded RX
@@ -95,14 +96,14 @@ int main(int argc, char** argv) {
             const auto before = audioUpdates;
             source->receive(samples, count); QElapsedTimer handoff; handoff.start();
             do { QCoreApplication::processEvents(); QThread::msleep(1); }
-            while (count >= parameters(mode).sampleRate / 10 && audioUpdates == before &&
+            while (count == statusBlock && audioUpdates == before &&
                    failure.isEmpty() && handoff.elapsed() < 1000);
             if (!failure.isEmpty()) throw std::runtime_error(failure.toStdString());
-            if (count >= parameters(mode).sampleRate / 10 && audioUpdates == before)
+            if (count == statusBlock && audioUpdates == before)
                 throw std::runtime_error("RX did not acknowledge the synthetic audio block");
         };
         std::array<float, 4800> block{};
-        while (const auto count = audio.render(block.data(), block.size(), .6f)) {
+        while (const auto count = audio.render(block.data(), statusBlock, .6f)) {
             feed(block.data(), count);
         }
         QElapsedTimer timer; timer.start();
@@ -111,7 +112,7 @@ int main(int argc, char** argv) {
         // Flush the display history with digital silence; no frozen constellation/spectrum.
         block.fill(0);
         for (unsigned i = 0; i < 15; ++i) {
-            feed(block.data(), block.size());
+            feed(block.data(), statusBlock);
         }
         timer.restart();
         while (!silenceSeen && failure.isEmpty() && timer.elapsed() < 3000) { QCoreApplication::processEvents(); QThread::msleep(2); }

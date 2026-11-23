@@ -43,6 +43,13 @@
 #include <cmath>
 #include <cstring>
 using namespace mm_sstv;
+
+template<typename Widget>
+Widget* findNamedWidget(const QWidget& parent, const char* name) {
+    // These custom widgets have no Qt meta-object of their own.
+    return dynamic_cast<Widget*>(parent.findChild<QWidget*>(name));
+}
+
 struct State {
     std::vector<AudioDevice> devices{{"other", "Other output"}, {"toQO100", "toQO100"}};
     std::string chosen, error;
@@ -70,6 +77,16 @@ private:
     State& state_;
 };
 struct CaptureState { bool open = false, failStart = false; unsigned starts = 0, sampleRate = 48000; AudioInput::Consume consume; std::string chosen, error; };
+
+bool feedSyntheticInput(CaptureState& capture, const float* samples, std::size_t count) {
+    if (!capture.consume) return false;
+    capture.consume(samples, count);
+    // Most blocks contain 100 ms of audio. Leave time for the real child
+    // process to drain its bounded pipe while accelerating the tests.
+    QTest::qWait(25);
+    return capture.open;
+}
+
 class FakeCapture final : public AudioInput {
 public:
     explicit FakeCapture(CaptureState& state) : state_(state) {}
@@ -134,7 +151,8 @@ private slots:
         const auto encoded = preparePicture(picture,picture.size()); const auto transmission = prepareImage(encoded.jpeg,"retry.jpg");
         const auto send = [&](const ImageTransmission& value) {
             ImageAudio signal(value); std::array<float,4800> buffer{};
-            while (const auto n = signal.render(buffer.data(),buffer.size(),1)) { capture.consume(buffer.data(),n); QTest::qWait(5); }
+            while (const auto n = signal.render(buffer.data(),buffer.size(),1))
+                QVERIFY(feedSyntheticInput(capture, buffer.data(), n));
         };
         send(transmission); auto* info = window.findChild<QLabel*>("receiveInfo");
         QTRY_VERIFY(info->text().contains("konnte nicht"));
@@ -224,7 +242,7 @@ private slots:
         settings.setValue("overlay/text0", "Bild"); settings.setValue("overlay/text2", "Empfang");
         auto input = std::make_unique<ContinuousInput>(); auto* capture = input.get();
         MainWindow window(std::make_unique<FakeOutput>(state), settings, std::move(input)); window.show(); QTRY_VERIFY(capture->callbacks > 0);
-        QVERIFY(window.loadImage(picture(dir))); const QImage image(picture(dir)); const auto preview = window.findChild<ImagePanel*>("imagePreview")->grab().toImage();
+        QVERIFY(window.loadImage(picture(dir))); const QImage image(picture(dir)); const auto preview = window.findChild<QWidget*>("imagePreview")->grab().toImage();
         const auto starts = capture->starts.load(); const auto output = settings.value("audio/output");
         auto* english = window.findChild<QAction*>("languageEnglish"); auto* german = window.findChild<QAction*>("languageGerman");
         QVERIFY(english); QVERIFY(german); QVERIFY(german->isChecked());
@@ -259,7 +277,7 @@ private slots:
         QCOMPARE(reader->findChild<QPlainTextEdit*>("bulletinReaderText")->toPlainText(), payload);
         QVERIFY(reader->findChild<QComboBox*>("bulletinArchiveChoice")->currentText().contains("(current)"));
         QCOMPARE(cw->toPlainText(), payload); QCOMPARE(psk->toPlainText(), payload);
-        QCOMPARE(window.findChild<ImagePanel*>("imagePreview")->grab().toImage(), preview); QCOMPARE(capture->starts.load(), starts);
+        QCOMPARE(window.findChild<QWidget*>("imagePreview")->grab().toImage(), preview); QCOMPARE(capture->starts.load(), starts);
         QCOMPARE(settings.value("audio/output"), output);
         const auto callbacks = capture->callbacks.load(); QTRY_VERIFY(capture->callbacks > callbacks + 3);
         if (qEnvironmentVariableIsSet("MM_SSTV_SCREENSHOT")) {
@@ -323,7 +341,7 @@ private slots:
             SstvAudio signal(Modulation::Martin1, sstvRaster(picture)); std::array<float, 4800> buffer{};
             for (unsigned block = 0; block < 100; ++block) {
                 const auto count = signal.render(buffer.data(), buffer.size(), 1);
-                capture.consume(buffer.data(), count); QTest::qWait(3);
+                QVERIFY(feedSyntheticInput(capture, buffer.data(), count));
             }
             QTRY_VERIFY(window.findChild<QProgressBar*>("receiveProgress")->value() > 0);
             QCOMPARE(QDir("rxpic").entryList({"*.png"}, QDir::Files).size(), 0);
@@ -377,7 +395,7 @@ private slots:
         editor.findChild<QCheckBox*>("overlayBold")->setChecked(false);
         QCOMPARE(editor.overlay().layers[2].font, 2); QCOMPARE(editor.overlay().layers[2].size, 30); QVERIFY(!editor.overlay().layers[2].bold);
         editor.findChild<QComboBox*>("overlayLayer")->setCurrentIndex(0);
-        auto* canvas = editor.findChild<OverlayPreview*>("overlayPreview"); QVERIFY(canvas);
+        auto* canvas = findNamedWidget<OverlayPreview>(editor, "overlayPreview"); QVERIFY(canvas);
         const double before = editor.overlay().layers[0].x;
         QTest::keyClick(canvas, Qt::Key_Right, Qt::ShiftModifier);
         QVERIFY(std::abs(editor.overlay().layers[0].x - before - 5./320) < 1e-6);
@@ -468,7 +486,7 @@ private slots:
             QVERIFY(std::any_of(buffer.begin() + 2400, buffer.end(), [](float sample) { return std::abs(sample) > .1f; }));
             QCOMPARE(settings.value("audio/level").toInt(), 100);
             QCOMPARE(window.findChild<QLabel*>("outputLevelValue")->text(), QString("100 %"));
-            auto* monitor = window.findChild<ReceiveMonitor*>("receiveMonitor"); QVERIFY(monitor);
+            auto* monitor = findNamedWidget<ReceiveMonitor>(window, "receiveMonitor"); QVERIFY(monitor);
             if (isSstv(mode)) {
                 lower->setValue(-6); upper->setValue(6); QVERIFY(monitor->autoLevel());
                 QCOMPARE(monitor->minimumDb(), -96); QCOMPARE(monitor->maximumDb(), -14);
@@ -488,7 +506,7 @@ private slots:
         QCOMPARE(restored.findChild<QSlider*>("outputLevel")->value(), 100);
         QCOMPARE(restored.findChild<QSlider*>("spectrumMin")->value(), isSstv(mode) ? -6 : -100);
         QCOMPARE(restored.findChild<QSlider*>("spectrumMax")->value(), isSstv(mode) ? 6 : 0);
-        auto* monitor = restored.findChild<ReceiveMonitor*>("receiveMonitor");
+        auto* monitor = findNamedWidget<ReceiveMonitor>(restored, "receiveMonitor");
         QCOMPARE(monitor->minimumDb(), isSstv(mode) ? -96 : -100); QCOMPARE(monitor->maximumDb(), isSstv(mode) ? -14 : 0);
     }
     void automaticWaterfallControls() {
@@ -502,14 +520,14 @@ private slots:
             window.resize(640, 440); window.show(); QTRY_VERIFY(capture.open);
             QVERIFY(!window.findChild<QCheckBox*>("waterfallAutoLevel")); QVERIFY(!settings.contains("display/sstvAutoLevel"));
             auto* lower = window.findChild<QSlider*>("spectrumMin"); auto* upper = window.findChild<QSlider*>("spectrumMax");
-            auto* monitor = window.findChild<ReceiveMonitor*>("receiveMonitor"); QVERIFY(monitor->autoLevel());
+            auto* monitor = findNamedWidget<ReceiveMonitor>(window, "receiveMonitor"); QVERIFY(monitor); QVERIFY(monitor->autoLevel());
             QCOMPARE(lower->value(), 0); QCOMPARE(upper->value(), 0);
             QCOMPARE(lower->singleStep(), 1); QCOMPARE(lower->pageStep(), 1); QCOMPARE(upper->pageStep(), 1);
             std::mt19937 random(127); std::normal_distribution<float> noise(0, .0005f);
             std::array<float, 4800> audio{}; std::size_t time = 0;
             for (int block = 0; block < 40; ++block) {
                 for (auto& sample : audio) { sample = noise(random) + float(.01 * std::sin(2 * 3.141592653589793 * 1800 * time / 48000)); ++time; }
-                capture.consume(audio.data(), audio.size()); QTest::qWait(3);
+                QVERIFY(feedSyntheticInput(capture, audio.data(), audio.size()));
             }
             QTRY_VERIFY(monitor->maximumDb() < -40); QVERIFY(monitor->minimumDb() < -90);
             QCOMPARE(lower->value(), 0); QCOMPARE(upper->value(), 0);
@@ -525,7 +543,7 @@ private slots:
             // the handles remain at the user's correction values.
             for (int block = 0; block < 30; ++block) {
                 for (auto& sample : audio) { sample = noise(random) + float(.03 * std::sin(2 * 3.141592653589793 * 1800 * time / 48000)); ++time; }
-                capture.consume(audio.data(), audio.size()); QTest::qWait(3);
+                QVERIFY(feedSyntheticInput(capture, audio.data(), audio.size()));
             }
             QTRY_VERIFY(monitor->maximumDb() > automaticMax + 7);
             QCOMPARE(lower->value(), -3); QCOMPARE(upper->value(), 4); QVERIFY(monitor->autoLevel());
@@ -543,7 +561,8 @@ private slots:
         QVERIFY(!restored.findChild<QCheckBox*>("waterfallAutoLevel"));
         QCOMPARE(restored.findChild<QSlider*>("spectrumMin")->value(), -3);
         QCOMPARE(restored.findChild<QSlider*>("spectrumMax")->value(), 4);
-        QVERIFY(restored.findChild<ReceiveMonitor*>("receiveMonitor")->autoLevel());
+        const auto* restoredMonitor = findNamedWidget<ReceiveMonitor>(restored, "receiveMonitor");
+        QVERIFY(restoredMonitor); QVERIFY(restoredMonitor->autoLevel());
     }
     void savedWaterfallAdjustmentsClamped() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
@@ -681,7 +700,7 @@ private slots:
         QVERIFY(!window.findChild<QAction*>("openImage")->isEnabled()); QVERIFY(!window.loadImage(picture(dir)));
         const auto audio = psk_test::audio48(psk_test::wave(QString::fromUtf8(MM_SSTV_PSK_DATA) + "/sample.wav"), 40);
         for (std::size_t at = 0; at < audio.size(); at += 4800) {
-            capture.consume(audio.data() + at, std::min(std::size_t(4800), audio.size() - at)); QTest::qWait(3);
+            QVERIFY(feedSyntheticInput(capture, audio.data() + at, std::min(std::size_t(4800), audio.size() - at)));
         }
         auto* text = window.findChild<QPlainTextEdit*>("pskBeaconText"); QVERIFY(text);
         QTRY_VERIFY_WITH_TIMEOUT(text->toPlainText().contains("CRC OK"), 10000);
@@ -725,8 +744,8 @@ private slots:
         for (int at = 0; at < audio.size();) {
             const auto bytes = std::min(int(sizeof(samples)), int(audio.size()) - at);
             std::memcpy(samples.data(), audio.constData() + at, std::size_t(bytes));
-            capture.consume(samples.data(), std::size_t(bytes) / sizeof(float)); at += bytes;
-            QTest::qWait(3);
+            QVERIFY(feedSyntheticInput(capture, samples.data(), std::size_t(bytes) / sizeof(float)));
+            at += bytes;
         }
         QTRY_VERIFY_WITH_TIMEOUT(window.findChild<QLabel*>("receiveStatistics")->text().contains("RX · Sync"), 5000);
         auto* cwText = window.findChild<QPlainTextEdit*>("beaconCwText");
@@ -771,7 +790,8 @@ private slots:
         for (int at = 0; at < audio.size();) {
             const int bytes = std::min(int(sizeof(samples)), int(audio.size()) - at);
             std::memcpy(samples.data(), audio.constData() + at, std::size_t(bytes));
-            capture.consume(samples.data(), std::size_t(bytes) / sizeof(float)); at += bytes; QTest::qWait(3);
+            QVERIFY(feedSyntheticInput(capture, samples.data(), std::size_t(bytes) / sizeof(float)));
+            at += bytes;
         }
         auto* text = window.findChild<QPlainTextEdit*>("beaconBulletinText");
         QTRY_VERIFY_WITH_TIMEOUT(text->toPlainText().contains("Test-Bulletin"), 5000);
@@ -851,7 +871,7 @@ private slots:
     void dragDropAndFormatSelection() {
         QTemporaryDir dir; QSettings settings(dir.filePath("prefs.ini"), QSettings::IniFormat); State state;
         MainWindow window(std::make_unique<FakeOutput>(state), settings); window.show();
-        auto* panel = window.findChild<ImagePanel*>("imagePreview"); QVERIFY(panel);
+        auto* panel = window.findChild<QWidget*>("imagePreview"); QVERIFY(panel);
         QMimeData mime; mime.setUrls({QUrl::fromLocalFile(picture(dir))});
         QDragEnterEvent enter(QPoint(10, 10), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
         QApplication::sendEvent(panel, &enter); QVERIFY(enter.isAccepted());
@@ -872,8 +892,8 @@ private slots:
             const auto prepared = preparePicture(image, QSize(640, 480)); ImageAudio signal(prepareImage(prepared.jpeg, "Rundfunkmuseum_Besichtigung_Cham_Radio_Sender.jpg"));
             std::array<float, 4800> buffer{};
             while (const auto count = signal.render(buffer.data(), buffer.size(), .6f)) {
-                QVERIFY(capture.open); capture.consume(buffer.data(), count);
-                std::array<float, 4800> txBuffer{}; state.render(txBuffer.data(), count); QTest::qWait(2);
+                std::array<float, 4800> txBuffer{}; state.render(txBuffer.data(), count);
+                QVERIFY(feedSyntheticInput(capture, buffer.data(), count));
             }
             QTRY_COMPARE_WITH_TIMEOUT(window.findChild<QProgressBar*>("receiveProgress")->value(), 100, 5000);
             QVERIFY(window.findChild<QAction*>("openReceiveFolder")->isEnabled());
@@ -913,7 +933,8 @@ private slots:
         auto* send = window.findChild<QPushButton*>("transmitButton"); send->click();
         QCOMPARE(state.sampleRate, 44100u); QVERIFY(!modes->isEnabled());
         std::array<float, 4410> buffer{};
-        while (const auto count = state.render(buffer.data(), buffer.size())) { capture.consume(buffer.data(), count); QTest::qWait(2); }
+        while (const auto count = state.render(buffer.data(), buffer.size()))
+            QVERIFY(feedSyntheticInput(capture, buffer.data(), count));
         state.complete = true;
         QTRY_COMPARE_WITH_TIMEOUT(window.findChild<QProgressBar*>("receiveProgress")->value(), 100, 5000);
         QTRY_COMPARE(send->text(), QString("Senden")); QVERIFY(modes->isEnabled()); QVERIFY(capture.open);
@@ -962,8 +983,7 @@ private slots:
         while (const auto count = state.render(buffer.data(), buffer.size())) {
             // Simulate receiver attenuation of the calibrated SSTV output.
             for (std::size_t i = 0; i < count; ++i) buffer[i] *= .03f;
-            capture.consume(buffer.data(), count); QTest::qWait(3);
-            QVERIFY2(capture.open, qPrintable(window.findChild<QLabel*>("receiveStatus")->text()));
+            QVERIFY2(feedSyntheticInput(capture, buffer.data(), count), qPrintable(window.findChild<QLabel*>("receiveStatus")->text()));
             if (receive->value() > 0 && receive->value() < 100) {
                 progressive = true; QVERIFY(window.findChild<QAction*>("openReceiveFolder")->isEnabled());
             }

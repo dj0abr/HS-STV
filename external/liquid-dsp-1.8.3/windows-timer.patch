@@ -1,0 +1,81 @@
+diff --git a/src/core/src/timer.c b/src/core/src/timer.c
+index c9557a1..2e0e1f0 100644
+--- a/src/core/src/timer.c
++++ b/src/core/src/timer.c
+@@ -24,10 +24,31 @@
+ #include <stdio.h>
+ #include <unistd.h>
+ #include <sys/time.h>
++#ifdef _WIN32
++#include <windows.h>
++#else
+ #include <sys/resource.h>
++#endif
+ 
+ #include "liquid.h"
+ 
++#ifdef _WIN32
++// Process CPU time in 100 ns units, including kernel and user time.
++static int liquid_process_ticks(ULONGLONG *ticks)
++{
++    FILETIME creation, exit, kernel, user;
++    if (!GetProcessTimes(GetCurrentProcess(), &creation, &exit, &kernel, &user))
++        return LIQUID_EINT;
++    ULARGE_INTEGER kernel_ticks, user_ticks;
++    kernel_ticks.LowPart = kernel.dwLowDateTime;
++    kernel_ticks.HighPart = kernel.dwHighDateTime;
++    user_ticks.LowPart = user.dwLowDateTime;
++    user_ticks.HighPart = user.dwHighDateTime;
++    *ticks = kernel_ticks.QuadPart + user_ticks.QuadPart;
++    return LIQUID_OK;
++}
++#endif
++
+ // timer data structure
+ struct liquid_timer_s
+ {
+@@ -38,7 +59,11 @@ struct liquid_timer_s
+     struct timeval tic_timeval;
+ 
+     // time object was created (LIQUID_TIMER_RUSAGE)
++#ifdef _WIN32
++    ULONGLONG tic_process_ticks;
++#else
+     struct rusage tic_rusage;
++#endif
+ };
+ 
+ // create liquid_timer object
+@@ -78,7 +103,11 @@ int liquid_timer_tic(liquid_timer _q)
+         if (gettimeofday(&_q->tic_timeval, NULL))
+             return liquid_error(LIQUID_EINT,"liquid_timer_tic(), gettimeofday() returned invalid flag");
+     } else if (_q->type == LIQUID_TIMER_RUSAGE) {
++#ifdef _WIN32
++        return liquid_process_ticks(&_q->tic_process_ticks);
++#else
+         getrusage(RUSAGE_SELF, &_q->tic_rusage);
++#endif
+     } else {
+         return liquid_error(LIQUID_EINT,"liquid_timer_tic(), invalid timer type");
+     }
+@@ -102,6 +131,12 @@ float liquid_timer_toc(liquid_timer _q)
+         return s + us*1e-6f;
+ 
+     } else if (_q->type == LIQUID_TIMER_RUSAGE) {
++#ifdef _WIN32
++        ULONGLONG ticks;
++        if (liquid_process_ticks(&ticks) != LIQUID_OK)
++            return liquid_error(LIQUID_EINT,"liquid_timer_toc(), GetProcessTimes() failed");
++        return (float)(ticks - _q->tic_process_ticks) * 1e-7f;
++#else
+         struct rusage toc;
+         getrusage(RUSAGE_SELF, &toc);
+         // compute run time
+@@ -110,6 +145,7 @@ float liquid_timer_toc(liquid_timer _q)
+         float time_us = toc.ru_utime.tv_usec - _q->tic_rusage.ru_utime.tv_usec
+                       + toc.ru_stime.tv_usec - _q->tic_rusage.ru_stime.tv_usec;
+         return time_s + 1e-6f*time_us;
++#endif
+     }
+     return liquid_error(LIQUID_EINT,"liquid_timer_toc(), invalid timer type");
+ }

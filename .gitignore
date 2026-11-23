@@ -1,4 +1,5 @@
 /build*/
+/HS-STV-Setup-x64.exe
 __pycache__/
 *.wav
 !/tests/data/psk-beacon/sample.wav
