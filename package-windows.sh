@@ -7,7 +7,7 @@ if [[ ${MSYSTEM:-} != UCRT64 ]]; then
 fi
 
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-build_dir="$project_dir/build-windows"
+build_dir="$(cygpath -au "${HS_STV_WINDOWS_BUILD_DIR:-$project_dir/build-windows}")"
 package_dir="$(mktemp -d "$build_dir/package.XXXXXX")"
 cmake --install "$build_dir" --prefix "$package_dir"
 bin="$package_dir/bin"

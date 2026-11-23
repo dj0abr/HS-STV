@@ -268,7 +268,7 @@ für die JPEG-Rundlaufprüfung eintragen. Dieser externe Decoder muss ebenfalls
 für **6000 bit/s** gebaut bzw. eingestellt sein:
 
 ```bash
-./build.sh -DMM_SSTV_RX_PROBE=/Daten/funk/sat/QO100_TRX2/build/bin/qo100_mm_probe
+./build.sh -DMM_SSTV_RX_PROBE="$PWD/../QO100_TRX2/build/bin/qo100_mm_probe"
 ctest --test-dir build --output-on-failure
 ```
 
@@ -331,6 +331,20 @@ Im Projektverzeichnis ausführen:
 bash build-windows.sh
 ctest --test-dir build-windows --output-on-failure
 bash package-windows.sh
+```
+
+Die Skripte bestimmen das Projektverzeichnis aus ihrem eigenen Speicherort.
+Nach einem Umzug erzeugt `build-windows.sh` die CMake-Caches mit den neuen
+Pfaden neu. Für einen Linux-Build nach einem Umzug kann mit CMake ab 3.24
+`./build.sh --fresh` verwendet werden.
+
+Auf Netzlaufwerken lässt sich vor dem Bau und der Paketierung mit
+`HS_STV_WINDOWS_BUILD_DIR` ein lokaler Windows-Buildordner wählen. Beide Skripte
+verwenden dann denselben Ordner. Beispiel für das UCRT64-Terminal:
+
+```bash
+export HS_STV_WINDOWS_BUILD_DIR="$HOME/hs-stv-build-windows"
+bash build-windows.sh && bash package-windows.sh
 ```
 
 Für einen Installationsassistenten zusätzlich [Inno Setup 6](https://jrsoftware.org/inno-setup/downloads)
