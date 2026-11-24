@@ -1,8 +1,14 @@
-# HS-STV – digitale & analoge Bildübertragung und Bakenmonitor für Amsat QO100
+[🇬🇧 English](README.md) · [🇩🇪 Deutsch](README_DE.md)
+
+# HS-STV – Digital and analog image transmission and beacon monitoring for AMSAT QO-100
 
 ![](docs/images/8e53ea93405395803894629d39e4b952fc231da7.png)
 
-## analoge Bildübertragung:
+HS-STV transmits and receives digital and analog images over the narrowband (NB) transponder of the QO-100 amateur radio satellite. It also decodes the PSK beacon and the multimedia beacon.
+
+The program runs on Windows and Linux and only needs an audio connection to your radio or SDR software.
+
+## Analog image transmission
 
 * SSTV Martin-1
 
@@ -12,106 +18,108 @@
 
 * SSTV Scottie-2
 
-## digitale Bildübertragung:
+## Digital image transmission
 
-* 8APSK high speed
+* 8APSK (high speed)
 
-* QPSK medium speed
+* QPSK (medium speed)
 
-## Bakenmonitor:
+## Beacon monitoring
 
-* PSK Bakendecoder
+* PSK beacon decoder
 
-* Multimedia Bakendecoder
+* Multimedia beacon decoder
 
-## Wasserfall-Text:
+## Waterfall text
 
-zuschaltbarer Wasserfall Text für die Ankündigung einer Aussendung
+Enable waterfall text to announce an upcoming transmission.
 
 ![](docs/images/14b95fbd89eabbc99b564ff1bac9291b9d5cd489.png)
 
 # Installation
 
-Klicke auf "Releases":
+Click **Releases**.
 
 ![](docs/images/b76f4f2038f16d877ced01ae8c1f8030942b19fe.png)
 
-Hier findet man fertige, lauffähige Pakete für:
+Prebuilt packages are available for Windows and Linux.
 
-* **Windows: HS-STV-Setup-x64.exe**, dieses SETUP Programm unter Windows starten. HS-STV wird dann installiert und kann über das Menü oder Desktop Icon gestartet werden
+* **Windows — HS-STV-Setup-x64.exe**. Run the installer on Windows, then launch HS-STV from the Start menu or the desktop icon.
 
-* **Linux ARM64 (Raspberry): HS-STV-1.0.0-aarch64.AppImage**, dieses Image enthält sämtliche erfoderlichen Komponenten, eine Installation ist nicht erforderlich. Nach dem Download gibt man der Datei Ausführungsrechte und kann dann mit Anklicken (oder Doppelklick) HS-STV starten
+* **Linux ARM64 (Raspberry Pi) — HS-STV-1.0.0-aarch64.AppImage**. The AppImage includes everything you need and runs without installation. After downloading it, make the file executable, then click or double-click it to start HS-STV.
 
-* **Linux PC: HS-STV-1.0.0-x86_64.AppImage**, dieses Image enthält sämtliche erfoderlichen Komponenten, eine Installation ist nicht erforderlich. Nach dem Download gibt man der Datei Ausführungsrechte und kann dann mit Anklicken (oder Doppelklick) HS-STV starten
+* **Linux PC — HS-STV-1.0.0-x86_64.AppImage**. The AppImage includes everything you need and runs without installation. After downloading it, make the file executable, then click or double-click it to start HS-STV.
 
-# Ersteinrichtung
+# Initial setup
 
 ![](docs/images/e7dc905af538030873997da2822867bfb77dd856.png)
 
-hier stellt man die gewünschten Soundkarten zum Senden und Empfangen ein. Die genauen Bezeichnungen sind systemabhängig. Meist sind es USB Adapter oder bei Icom Geräten heißt es oft PCM2901 usw.
+Choose the audio devices for transmitting and receiving. Device names vary by system. They are usually USB audio adapters. Icom radios often appear as PCM2901 or a similar name.
 
-Sind die Soundkarten eingestellt kann der Funkbetrieb beginnen. Bei korrekt ausgewähltem Audioeingang und eingeschaltetem Funkgerät sieht man im Spektrum bereits das Rauschen.
+Once your audio devices are set up, you can start operating. With the correct audio input selected and the radio switched on, you should see noise in the spectrum display.
 
-# Empfangstest QO100 PSK Bake
+# QO-100 PSK beacon reception test
 
-man stellt den Empfänger auf die PSK Bake, welche sich genau in der Mitte des QO100 NB Transponders befinden. Das Spektum soll dann so aussehen:
+Tune your receiver to the PSK beacon at the center of the QO-100 narrowband transponder. The spectrum should look like this.
+
 ![](docs/images/109093ba33eb8abe3f7a354e8b57f3b331637cf1.png)
 
-nach ca. einer halben Minute erscheint der dekodierte Text:
+The decoded text appears after about half a minute.
 
 ![](docs/images/f74dc8ce6ffa976a6cfce1e370ee999306179ab5.png)
 
-jetzt kann man weitere Betriebsarten auswählen, z.B. SSTV Martin-1 und SSTV Sendungen mithören.
+You can now try other modes, such as SSTV Martin-1, and listen for SSTV transmissions.
 
-# Sendetest SSTV via QO100
+# SSTV transmission test via QO-100
 
-HS-STV arbeitet Vollduplex, das bedeutet, gesendeten Bilder werden von QO100 wieder zurückgesendet und können von HS-STV gleichzeitig zur Aussendung auch empfangen werden. Damit kann die Sende- und Empfangsfrequenz sauber eingestellt werden.
+HS-STV operates in full duplex. QO-100 relays the image you send, and HS-STV can receive it while transmitting. This lets you fine-tune your transmit and receive frequencies.
 
-* Auswahl: Betriebsart SSTV Martin 1
+* Select **SSTV Martin 1**.
 
-* Funkgerät auf eine freie Frequenz im Digitalbereich des Bandplans stellen
+* Tune your radio to an unused frequency in the digital portion of the band plan.
 
-* linke Bildfläche anklicken und ein Bild auf dem PC auswählen (Format ist egal, es wird automatisch gezoomt).
+* Click the left image panel and choose an image from your computer. HS-STV scales the image automatically.
 
-* "Text..." anklicken. Hier können Rufzeichen und bis zu 5 wählbare Texte hinterlegt und dem Bild überlagert werden
+* Click **Text…** to set up your callsign and up to five selectable text overlays.
   ![](docs/images/054754a5d8f0ac41d012ced383689728fceee8b6.png)
 
-* wenn gewünscht "Wasserfall-ID" aktivieren um die Betriebsart im Wasserfall anzukündigen.
+* Enable **Waterfall-ID** if you want to announce the operating mode in the waterfall.
 
-* das gewünschte Text Overlay 1 bis 5 auswählen. Die Auflösung ist bei analogem SSTV immer 320x256
+* Select text overlay 1 to 5. Analog SSTV always uses a resolution of 320 × 256 pixels.
   ![](docs/images/1e1748b9bea99c5fa021fd01d31b1b82b65f3077.png)
 
-* einen mittleren Pegel einstellen, das Funkgerät auf Sendung stellen und "Senden" drücken.
+* Set a moderate transmit level, put your radio into transmit mode, and click **Transmit**.
 
 ![](docs/images/746cc1719b0bf3135c4f1d985cda3b58dbe52414.png)
 
-man empfängt jetzt die eigene Aussendung via QO100. Dabei kann man die Freqenz fein justieren, damit die SSTV SYNC Impulse auf der Sync Linie liegen:
+You should now receive your own transmission via QO-100. Fine-tune the frequency until the SSTV sync pulses align with the sync line.
 
 ![](docs/images/bdf747bf8a82fd7edcf360aca9b54ceaa0ca1287.png)
 
-# digitale Bildübertragung
+# Digital image transmission
 
-* 8APSK mit 6kbit/s oder QPSK mit 4,4kbit/s wählen.
+* Select 8APSK at 6 kbit/s or QPSK at 4.4 kbit/s.
 
-* sonstige Einstellungen (Text-Overlay) wie oben, aber zusätzlich kann man die Bildauflösung einstellen.
+* Set up the text overlay as described above. In digital modes, you can also choose the image resolution.
 
-* "Senden" drücken
+* Click **Transmit**.
 
-* die Qualität des von QO100 empfangenen Signals im Konstellationsdiagramm prüfen. Die Punkte sollten klar unterscheidbar sein, ggf. den Sendepegel nachstellen:
+* Check the quality of the signal received from QO-100 in the constellation diagram. The points should be clearly distinguishable. Adjust the transmit level if needed.
   ![](docs/images/21ce0a931b6983eb677a80ecc0860954cf4ccbe3.png)
 
-* durch die digitale Übertragung ist das Bild gestochen scharf in identischer Qualität wie das gesendete Originalbild.
+* Digital transmission preserves the quality and sharpness of the original image.
 
-* 8APSK stellt etwas höhere Anforderungen an die Qualität des Empfangssignals. Fall es zu verrauscht ist, kann man mit QPSK bessere Ergebnisse erzielen, bei etwas langsamerer Übertragung
+* 8APSK requires a cleaner received signal. If the signal is too noisy, QPSK can give better results with a slightly longer transmission time.
 
-# Übertragungsgeschwindigkeiten
+# Transmission times
 
-diese Werte gelten für eine Auflösung von 320x256 Pixel analog oder 320x240 Pixel digital:
-| Betriebsart      | Übertragungszeit | Qualität                 |
-|------------------|-----------------:|--------------------------|
-| SSTV Martin 1    |            115 s | analog verrauscht        |
-| SSTV Martin 2    |             60 s | unscharf und verrauscht  |
-| SSTV Scottie 1   |            110 s | analog verrauscht        |
-| SSTV Scottie 2   |             72 s | unscharf und verrauscht  |
-| 8APSK 6000 bit/s |             56 s | wie Original             |
-| QPSK 4410 bit/s  |             79 s | wie Original             |
+These times apply at 320 × 256 pixels for analog modes and 320 × 240 pixels for digital modes.
+
+| Mode             | Transmission time | Quality          |
+| ---------------- | ----------------: | ---------------- |
+| SSTV Martin 1    |             115 s | Analog, noisy    |
+| SSTV Martin 2    |              60 s | Blurry and noisy |
+| SSTV Scottie 1   |             110 s | Analog, noisy    |
+| SSTV Scottie 2   |              72 s | Blurry and noisy |
+| 8APSK 6000 bit/s  |              56 s | Matches original |
+| QPSK 4410 bit/s   |              79 s | Matches original |
